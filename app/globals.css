@@ -231,6 +231,14 @@ button, input, textarea { font: inherit; color: inherit; }
 .line--net { border-left: 2px solid var(--ok); padding-left: 10px; margin-left: -2px; }
 .line--net .line__tag { color: var(--ok); }
 
+/* own relay lines read brighter, so "you" pop inside the green channel */
+.line--me .line__tag,
+.line--me .line__text { color: var(--fg-bright); }
+
+/* live relay terminal — narrower roster than the agent split */
+.live__main { grid-template-columns: minmax(0, 1fr) 300px; }
+.feedwrap__hint-sys { color: var(--faint); font-size: var(--step-0); letter-spacing: 0.06em; }
+
 .line--user .line__text { color: var(--fg-bright); }
 .line--sys .line__text { color: var(--fg-dim); }
 .line--cmd .line__text { color: var(--fg); }
@@ -499,6 +507,11 @@ button, input, textarea { font: inherit; color: inherit; }
   .main[data-view="bridge"] .panel:not([data-panel="bridge"]) { display: none; }
   .panels { overflow-y: auto; }
   .kbview { display: none; }
+
+  /* live relay terminal on small screens: feed first, roster stacked below */
+  .live__main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .live__main .feedwrap { border-right: 0; }
+  .live__main .panels { border-top: 1px solid var(--border); max-height: 32dvh; }
 }
 
 @media (max-width: 560px) {

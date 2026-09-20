@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { readMemory, appendMemory, setSummary, clearMemory } from '@/lib/memory';
+import { readMemory, appendMemory, setMemorySummary, clearMemory } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
 
 /** GET /api/memory — recent turns + summary + counters. */
 export async function GET() {
-  const memory = readMemory();
+  const memory = await readMemory();
   return NextResponse.json({
     summary: memory.summary,
     lastTopic: memory.lastTopic,
@@ -20,15 +20,15 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
 
   if (body.type === 'summary') {
-    const memory = setSummary(body.summary);
+    const memory = await setMemorySummary(body.summary);
     return NextResponse.json({ ok: true, count: memory.entries.length, summary: memory.summary });
   }
 
   if (body.type === 'clear') {
-    const memory = clearMemory();
+    const memory = await clearMemory();
     return NextResponse.json({ ok: true, count: memory.entries.length, cleared: true });
   }
 
-  const memory = appendMemory({ agent: body.agent, text: body.text, topic: body.topic });
+  const memory = await appendMemory({ agent: body.agent, text: body.text, topic: body.topic });
   return NextResponse.json({ ok: true, count: memory.entries.length, updatedAt: memory.updatedAt });
 }

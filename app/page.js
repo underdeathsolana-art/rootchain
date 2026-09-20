@@ -6,6 +6,7 @@ import AgentFeed from '@/components/agentfeed';
 import SidePanels from '@/components/sidepanels';
 import BootGate from '@/components/bootgate';
 import ConnectorPanel from '@/components/connectorpanel';
+import LiveTerminal from '@/components/liveterminal';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
@@ -26,6 +27,7 @@ const HELP_TEXT = [
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
   '  chat       relay to other operators: chat <message> · chat for presence',
+  '  chat live  open the live operator terminal (roster + direct chat)',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
   '  register   open the access-code registration panel',
@@ -82,7 +84,8 @@ export default function Page() {
   const [connector, setConnector] = useState(null);
   const [topics, setTopics] = useState({ active: null, current: [], scheduled: [], archive: [] });
   const [memory, setMemory] = useState({ summary: '', lastTopic: null, count: 0, recent: [] });
-  const [relay, setRelay] = useState({ online: [], authed: false });
+  const [relay, setRelay] = useState({ online: [], authed: false, operators: [], store: '' });
+  const [liveMode, setLiveMode] = useState(false);
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -94,7 +97,7 @@ export default function Page() {
   const nextSpeakerRef = useRef('root');
   const bootedRef = useRef(false);
   const linkWarnedRef = useRef(false);
-  const relayLastIdRef = useRef(0);
+  const relayCursorRef = useRef('');
   const relayBusyRef = useRef(false);
   const relaySyncedRef = useRef(false);
   const reduceRef = useRef(false);
@@ -254,20 +257,25 @@ export default function Page() {
     if (!session || relayBusyRef.current) return;
     relayBusyRef.current = true;
     try {
-      const params = new URLSearchParams({ since: String(relayLastIdRef.current) });
+      const params = new URLSearchParams({ since: relayCursorRef.current });
       params.set('username', session.username);
       params.set('code', session.code);
       const res = await fetch(`/api/relay?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.ok) {
-        setRelay({ online: data.online || [], authed: Boolean(data.authed) });
+        setRelay({
+          online: data.online || [],
+          authed: Boolean(data.authed),
+          operators: data.operators || [],
+          store: data.store || '',
+        });
         const incoming = data.messages || [];
 
         // First poll after login: sync silently and surface only the tail of
         // the history, so the feed is never flooded with old relay lines.
         if (!relaySyncedRef.current) {
           relaySyncedRef.current = true;
-          relayLastIdRef.current = Math.max(relayLastIdRef.current, data.lastId || 0);
+          relayCursorRef.current = data.lastCursor || '';
           if (incoming.length > 5) {
             push({
               kind: 'sys',
@@ -280,9 +288,9 @@ export default function Page() {
           }
         } else {
           for (const m of incoming) {
-            relayLastIdRef.current = Math.max(relayLastIdRef.current, m.id);
             push({ kind: 'net', tag: `[RELAY] ${m.username}`, text: m.text, instant: true });
           }
+          relayCursorRef.current = data.lastCursor || relayCursorRef.current;
         }
       }
     } catch {
@@ -472,6 +480,7 @@ export default function Page() {
                 : null,
               `  CROSS-CHAIN ....... READY`,
               `  MEMORY ............ ${status.memory ? 'ACTIVE' : 'STANDBY'} · ${memory.count} turn(s)`,
+              `  RELAY ............. ${relay.online.length} online · ${relay.operators.length} registered · ${relay.store === 'mongodb' ? 'MONGODB' : relay.store ? 'FILE' : '—'}`,
               `  SESSION ........... ${session?.username} · ${session?.code}`,
               `  ACTIVE TOPIC ...... ${t.active ? t.active.title : 'none loaded'}`,
               `  AUTO LOOP ......... ${auto ? 'on' : 'off'}`,
@@ -542,6 +551,11 @@ export default function Page() {
           break;
 
         case 'chat': {
+          if ((rest[0] || '').toLowerCase() === 'live') {
+            setLiveMode(true);
+            push({ kind: 'sys', text: 'opening live relay terminal…', instant: true });
+            break;
+          }
           const text = rest.join(' ').trim();
           if (!text) {
             push({
@@ -564,7 +578,7 @@ export default function Page() {
             });
             const data = await res.json();
             if (data.ok) {
-              relayLastIdRef.current = Math.max(relayLastIdRef.current, data.message.id);
+              relayCursorRef.current = data.cursor || relayCursorRef.current;
               push({ kind: 'net', tag: `[RELAY] ${session.username}`, text, instant: true });
             } else {
               push({ kind: 'error', text: `relay refused — ${data.error || 'try again.'}` });
@@ -618,7 +632,7 @@ export default function Page() {
           push({ kind: 'error', text: `rootchain: command not found: ${word}. Type "help".` });
       }
     },
-    [auto, memory.count, memory.lastTopic, promptText, push, relay.online, refreshMemory, refreshTopics, runAgentTurn, session, status],
+    [auto, memory.count, memory.lastTopic, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, status],
   );
 
   function onSubmit(event) {
@@ -662,6 +676,10 @@ export default function Page() {
         </div>
       </div>
     );
+  }
+
+  if (liveMode && session) {
+    return <LiveTerminal session={session} relay={relay} onExit={() => setLiveMode(false)} />;
   }
 
   return (

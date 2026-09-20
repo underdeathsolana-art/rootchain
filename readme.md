@@ -21,7 +21,7 @@ operators can also talk to each other live through the **relay chat**
 | UI | React 18 client components, hand-written CSS (no UI kit) |
 | Fonts | system monospace stack — no external font/asset requests |
 | State | React state + `localStorage` (session mirror + conversation mirror) |
-| Server memory | JSON files under `.data/` (memory + registered access codes) |
+| Storage | MongoDB when `MONGODB_URI` is set (Vercel + the MongoDB integration) — users, relay messages, presence and agent memory in the `rootchain` database; falls back to JSON files under `.data/` locally (`lib/store.js`) |
 | AI | Bring-your-own via the MCP connector — MCP server (Streamable HTTP) or OpenAI-compatible endpoint, proxied through `/api/chat`; local offline engine when nothing is attached |
 
 ---
@@ -66,15 +66,31 @@ probes the endpoint before you connect.
 
 Registered users talk to each other in terminal mode:
 
-- `chat <message>` — speak on the relay (green `[RELAY] name` lines, instant)
-- `chat` — show who is online right now
+- `chat live` — **open the live relay terminal**: a second, dedicated terminal
+  whose roster lists every registered user (● online / ○ offline). Typing
+  there speaks directly on the relay; `who`, `clear` and `exit` work inside;
+  ESC or "exit" returns to the agent terminal
+- `chat <message>` — speak on the relay from the main terminal
+  (green `[RELAY] name` lines, instant); `chat` shows who is online
 - The **Relay** side panel lists online operators; presence lives while a
   terminal is polling (last 45s)
 - Messages are capped at 280 chars with a ~1.2s per-user cooldown; usernames
   are resolved from access codes server-side, so nobody can impersonate
   another operator
-- Delivery is a light 3s poll (`GET /api/relay?since=…`) — no WebSocket
-  needed, which keeps it working on serverless hosts
+- Delivery is a light 3s poll (`GET /api/relay?since=…`) with opaque string
+  cursors — no WebSocket needed, which keeps it working on serverless hosts
+
+### Database (MongoDB on Vercel)
+
+Set `MONGODB_URI` in the project's environment (the Vercel MongoDB
+integration does this automatically) and all storage moves to the
+`rootchain` database — durable across instances. Without it, the app runs
+on local JSON files. The active backend is shown in the relay header and
+the `status` command (`MONGODB` / `FILE`), and returned as `store` by
+`GET /api/relay`. Optional: `MONGODB_DB` overrides the database name.
+
+> On Vercel's read-only filesystem the file fallback would be ephemeral —
+> with MongoDB connected, users, relay history and agent memory persist.
 
 ---
 
@@ -93,7 +109,7 @@ Boot / login ──▶ Terminal shell ──▶ Agent loop ──▶ your AI (MC
 | `/api/topics` | GET | Reads `content/topics/{current,scheduled,archive}` from disk on every call |
 | `/api/chat` | POST | Builds one agent's turn, calls the attached connector (or local engine), returns the line (+ mode) |
 | `/api/connector` | POST | `action: test` probes a connector from the panel (validates, lists MCP tools) |
-| `/api/relay` | GET/POST | Operator live chat — poll messages + presence (`since`), send with username+code |
+| `/api/relay` | GET/POST | Operator live chat — poll messages + presence + registered roster (`since` cursor), send with username+code |
 | `/api/memory` | GET/POST | Reads / appends conversation memory (`type: turn \| summary \| clear`) |
 | `/api/session` | POST | `action: register` issues an access code · `action: login` verifies one |
 
@@ -112,6 +128,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `status` | Terminal + module status |
 | `agents` | Latest Root / Chain exchange · `agents on` · `agents off` · `agents step` |
 | `connect` | Open the MCP connector panel — attach your own AI |
+| `chat live` | Open the live operator terminal (registered-user roster + direct chat) |
 | `chat` | Relay to other operators: `chat <message>` · `chat` for presence |
 | `topic` | Active topic from `content/topics/current/` |
 | `bridge` | Solana → BSC → Robinhood route map |
@@ -133,7 +150,8 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | Tune the agents' voice | `lib/agents.js` — `AGENTS.*.brief` and the reply rules |
 | Extend the local offline engine | `localReply()` in `app/api/chat/route.js` |
 | Add connector link types | `lib/connector.js` (`callChatApi`, `callMcp`, `testConnector`) |
-| Tune the relay (history, cooldown, online window) | `lib/relay.js` |
+| Tune the relay / storage backends | `lib/store.js` (MongoDB + file fallback) |
+| Test the Mongo path locally | `node scripts/memory-mongo.js` → `MONGODB_URI=<uri> npm run dev -- -p 3200` |
 | Recolour the terminal | `app/globals.css` → the `:root` block (`--fg`, `--ch-link`, `--bg`, …) |
 | Change the header / status copy | `components/StatusBar.js` and the `<header>` in `app/page.js` |
 | Change the bridge route | `components/SidePanels.js` (bridge panel) + `BRIDGE_TEXT` in `app/page.js` |
@@ -163,8 +181,7 @@ Works on any Node host (Vercel, a VPS, Docker). Two things to remember:
 
 1. No model key is needed on the host — every user brings their own AI through
    the connector, and credentials never touch the server's disk.
-2. `.data/` must be writable/persistent for memory and registrations to
-   survive. On read-only hosts (Vercel serverless) the app automatically falls
-   back to a temp dir, so it keeps working but memory resets between
-   instances — swap `lib/memory.js` / `lib/session.js` for a database if you
-   need durability.
+2. Set `MONGODB_URI` (Vercel MongoDB integration) so users, relay history and
+   memory persist across instances. Without it the app falls back to a temp
+   dir, which resets between serverless invocations — swap in a database or
+   run on a persistent host if you need durability.
