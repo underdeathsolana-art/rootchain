@@ -78,10 +78,15 @@ Registered users talk to each other in terminal mode:
   on their lines, tags and roster entry; your own lines carry a soft tint
 - **Mentions** — `@name` lights up in any line (names with spaces work);
   a mention of *you* highlights the whole line
-- **Direct messages** — `dm <name> <message>` inside the live terminal
-  (`chat dm <name> <message>` from the main one). The target is matched
-  greedily against registered usernames, so multi-word names resolve; DMs
-  are visible only to sender and recipient
+- **Direct messages & private terminals** — `dm <name> <message>` (or
+  `chat dm <name> [message]` from the main terminal) opens a **dedicated
+  private terminal for that operator**: the channel bar at the top switches
+  between `# relay` and every `@ peer` you talk to (roster names are
+  clickable too), typing there goes straight to them, incoming lines light
+  an unread badge, and ESC hops back through channels
+- **Conversation topics** — inside a private terminal, `topic <text>` sets
+  that channel's topic; it is stored server-side (sorted pair key) so both
+  sides always see the same subject line under the channel bar
 - Messages are capped at 280 chars with a ~1.2s per-user cooldown; usernames
   are resolved from access codes server-side, so nobody can impersonate
   another operator
@@ -137,7 +142,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `agents` | Latest Root / Chain exchange · `agents on` · `agents off` · `agents step` |
 | `connect` | Open the MCP connector panel — attach your own AI |
 | `chat live` | Open the live operator terminal (roster, colours, mentions, DMs) |
-| `chat dm` | Private line: `chat dm <operator> <message>` |
+| `chat dm` | Open a private terminal with an operator: `chat dm <name> [message]` |
 | `chat` | Relay to other operators: `chat <message>` · `chat` for presence |
 | `topic` | Active topic from `content/topics/current/` |
 | `bridge` | Solana → BSC → Robinhood route map |

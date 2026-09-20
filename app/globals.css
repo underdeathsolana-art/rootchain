@@ -254,6 +254,42 @@ button, input, textarea { font: inherit; color: inherit; }
 .live__main { grid-template-columns: minmax(0, 1fr) 300px; }
 .feedwrap__hint-sys { color: var(--faint); font-size: var(--step-0); letter-spacing: 0.06em; }
 
+/* channel bar — switch between the public relay and private terminals */
+.chanbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; }
+.chanbar button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg-dim);
+  padding: 4px 10px;
+  font-size: var(--step-0);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.chanbar button[aria-selected="true"] {
+  color: var(--fg-bright);
+  border-color: var(--border-strong);
+  background: rgba(255, 176, 0, 0.08);
+}
+.chanbar button:focus-visible { outline: 2px solid var(--fg-bright); outline-offset: 1px; }
+.chanbar__badge { color: var(--warn); margin-left: 6px; font-weight: 600; }
+
+/* private-channel topic bar */
+.topicbar {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-dim);
+  font-size: var(--step-1);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* live feed column stacks bar + optional topic + log */
+.live__feedwrap { display: flex; flex-direction: column; }
+.live__feedwrap .log { flex: 1 1 0; }
+
 .line--user .line__text { color: var(--fg-bright); }
 .line--sys .line__text { color: var(--fg-dim); }
 .line--cmd .line__text { color: var(--fg); }

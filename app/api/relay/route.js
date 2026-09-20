@@ -6,6 +6,8 @@ import {
   findUserByCode,
   listOperators,
   storeMode,
+  getDmTopics,
+  setDmTopic,
 } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
@@ -28,11 +30,12 @@ export async function GET(req) {
     if (user && user.username.toLowerCase() === username.toLowerCase()) me = user;
   }
 
-  const [state, operators] = await Promise.all([
+  const [state, operators, topics] = await Promise.all([
     me
       ? pingPresence(me.username).then(() => relayState(since, me.username.toLowerCase()))
       : relayState(since, null),
     listOperators(),
+    me ? getDmTopics(me.username.toLowerCase()) : Promise.resolve({}),
   ]);
 
   const onlineSet = new Set(state.online);
@@ -41,17 +44,19 @@ export async function GET(req) {
     authed: Boolean(me),
     ...state,
     operators: operators.map((o) => ({ ...o, online: onlineSet.has(o.username) })),
+    topics,
     store: await storeMode(),
   });
 }
 
 /**
- * POST /api/relay { username, code, text, dm? }
+ * POST /api/relay { username, code, text | dm | topic, peer? }
  *   Speak on the relay. The operator is resolved from the access code, so a
  *   message always carries the canonical registered username.
- *   With `dm` present it is a direct message: `dm` holds "<name> <message>"
- *   and the target is matched greedily against registered usernames, so
- *   names containing spaces resolve correctly.
+ *   · `dm`   — "<name> <message>": direct message, target matched greedily
+ *              against registered usernames (names with spaces work)
+ *   · `topic` + `peer` — set the conversation topic of the private channel
+ *              with that operator
  */
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
@@ -67,6 +72,26 @@ export async function POST(req) {
   let text;
   let to = null;
   let toName = null;
+
+  if (body.topic != null) {
+    const peerName = String(body.peer || '').trim();
+    const operators = await listOperators();
+    const match = operators
+      .map((o) => o.username)
+      .find((name) => name.toLowerCase() === peerName.toLowerCase());
+    if (!match) {
+      return NextResponse.json({ ok: false, error: 'No registered operator by that name.' }, { status: 404 });
+    }
+    const topic = String(body.topic || '')
+      .replace(/[\u0000-\u001f]+/g, ' ')
+      .trim()
+      .slice(0, 200);
+    if (!topic) {
+      return NextResponse.json({ ok: false, error: 'Empty topic.' }, { status: 400 });
+    }
+    const doc = await setDmTopic(user.username.toLowerCase(), match.toLowerCase(), topic, user.username);
+    return NextResponse.json({ ok: true, peer: match, topic: doc.topic, setBy: doc.setBy });
+  }
 
   if (body.dm != null) {
     const tail = String(body.dm || '')

@@ -28,7 +28,7 @@ const HELP_TEXT = [
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
   '  chat       relay to other operators: chat <message> · chat for presence',
-  '  chat dm    private line: chat dm <operator> <message>',
+  '  chat dm    open a private terminal: chat dm <operator> [message]',
   '  chat live  open the live operator terminal (roster + direct chat)',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -88,6 +88,7 @@ export default function Page() {
   const [memory, setMemory] = useState({ summary: '', lastTopic: null, count: 0, recent: [] });
   const [relay, setRelay] = useState({ online: [], authed: false, operators: [], store: '' });
   const [liveMode, setLiveMode] = useState(false);
+  const [liveChannel, setLiveChannel] = useState('relay');
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -589,33 +590,49 @@ export default function Page() {
           if ((rest[0] || '').toLowerCase() === 'dm') {
             const tail = rest.slice(1).join(' ').trim();
             if (!tail) {
-              push({ kind: 'sys', text: 'usage: chat dm <operator> <message>', speed: 6 });
+              push({ kind: 'sys', text: 'usage: chat dm <operator> [message]', speed: 6 });
               break;
             }
-            try {
-              const res = await fetch('/api/relay', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: session?.username, code: session?.code, dm: tail }),
-              });
-              const data = await res.json();
-              if (data.ok) {
-                relayCursorRef.current = data.cursor || relayCursorRef.current;
-                const target = data.toName || '?';
-                push({
-                  kind: 'dm',
-                  instant: true,
-                  color: userColor(target),
-                  tag: `[DM · you » ${target}]`,
-                  text: data.message.text,
-                });
-              } else {
-                const reason = String(data.error || 'try again.').replace(/\.+$/, '');
-                push({ kind: 'error', text: `relay refused — ${reason}.` });
-              }
-            } catch {
-              push({ kind: 'error', text: 'relay unreachable — is the terminal service running?' });
+            // greedy match against the roster, so names with spaces resolve
+            const lower = tail.toLowerCase();
+            const match = relay.operators
+              .map((o) => o.username)
+              .sort((a, b) => b.length - a.length)
+              .find((n) => lower === n.toLowerCase() || lower.startsWith(`${n.toLowerCase()} `));
+            if (!match) {
+              push({ kind: 'error', text: `no operator matches "${tail.split(' ')[0]}" — try "chat" for the roster.` });
+              break;
             }
+            const messageText = tail.slice(match.length).trim();
+            if (messageText) {
+              try {
+                const res = await fetch('/api/relay', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ username: session?.username, code: session?.code, dm: `${match} ${messageText}` }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                  relayCursorRef.current = data.cursor || relayCursorRef.current;
+                  push({
+                    kind: 'dm',
+                    instant: true,
+                    color: userColor(match),
+                    tag: `[DM · you » ${match}]`,
+                    text: data.message.text,
+                  });
+                } else {
+                  const reason = String(data.error || 'try again.').replace(/\.+$/, '');
+                  push({ kind: 'error', text: `relay refused — ${reason}.` });
+                  break;
+                }
+              } catch {
+                push({ kind: 'error', text: 'relay unreachable — is the terminal service running?' });
+                break;
+              }
+            }
+            setLiveChannel(`dm:${match.toLowerCase()}`);
+            setLiveMode(true);
             break;
           }
           const text = rest.join(' ').trim();
@@ -751,7 +768,17 @@ export default function Page() {
   }
 
   if (liveMode && session) {
-    return <LiveTerminal session={session} relay={relay} onExit={() => setLiveMode(false)} />;
+    return (
+      <LiveTerminal
+        session={session}
+        relay={relay}
+        initialChannel={liveChannel}
+        onExit={() => {
+          setLiveMode(false);
+          setLiveChannel('relay');
+        }}
+      />
+    );
   }
 
   return (
