@@ -29,7 +29,9 @@ export async function GET(req) {
   }
 
   const [state, operators] = await Promise.all([
-    me ? pingPresence(me.username).then(() => relayState(since)) : relayState(since),
+    me
+      ? pingPresence(me.username).then(() => relayState(since, me.username.toLowerCase()))
+      : relayState(since, null),
     listOperators(),
   ]);
 
@@ -44,9 +46,12 @@ export async function GET(req) {
 }
 
 /**
- * POST /api/relay { username, code, text }
+ * POST /api/relay { username, code, text, dm? }
  *   Speak on the relay. The operator is resolved from the access code, so a
  *   message always carries the canonical registered username.
+ *   With `dm` present it is a direct message: `dm` holds "<name> <message>"
+ *   and the target is matched greedily against registered usernames, so
+ *   names containing spaces resolve correctly.
  */
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
@@ -59,15 +64,58 @@ export async function POST(req) {
     return NextResponse.json({ ok: false, error: 'Unrecognised operator code.' }, { status: 401 });
   }
 
-  const text = String(body.text || '')
-    .replace(/[\u0000-\u001f]+/g, ' ')
-    .trim()
-    .slice(0, 280);
+  let text;
+  let to = null;
+  let toName = null;
+
+  if (body.dm != null) {
+    const tail = String(body.dm || '')
+      .replace(/[\u0000-\u001f]+/g, ' ')
+      .trim();
+    if (!tail) {
+      return NextResponse.json({ ok: false, error: 'Usage: dm <operator> <message>' }, { status: 400 });
+    }
+
+    const operators = await listOperators();
+    const lower = tail.toLowerCase();
+    const match = operators
+      .map((o) => o.username)
+      .sort((a, b) => b.length - a.length)
+    // the target must be followed by a space + message (or be the whole tail)
+      .find((name) => lower === name.toLowerCase() || lower.startsWith(`${name.toLowerCase()} `));
+
+    if (!match) {
+      return NextResponse.json(
+        { ok: false, error: 'No registered operator by that name.' },
+        { status: 404 },
+      );
+    }
+    if (match.toLowerCase() === user.username.toLowerCase()) {
+      return NextResponse.json(
+        { ok: false, error: 'You are already talking to yourself.' },
+        { status: 400 },
+      );
+    }
+
+    toName = match;
+    to = match.toLowerCase();
+    text = tail.slice(match.length).trim();
+    if (!text) {
+      return NextResponse.json(
+        { ok: false, error: `Write a message for ${match}: dm ${match} <message>` },
+        { status: 400 },
+      );
+    }
+  } else {
+    text = String(body.text || '');
+  }
+
+  text = text.replace(/[\u0000-\u001f]+/g, ' ').trim().slice(0, 280);
   if (!text) {
     return NextResponse.json({ ok: false, error: 'Empty transmission.' }, { status: 400 });
   }
 
-  const result = await appendRelayMessage(user, text);
+  const result = await appendRelayMessage(user, text, to);
   if (!result.ok) return NextResponse.json(result, { status: 429 });
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, toName });
 }

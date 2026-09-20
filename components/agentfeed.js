@@ -25,9 +25,14 @@ export default function AgentFeed({ lines }) {
           key={line.id}
           className={`line line--${line.kind}`}
           data-agent={line.agent || undefined}
+          style={line.color ? { borderLeftColor: line.color } : undefined}
         >
           {line.tag ? (
-            <span className="line__tag" aria-hidden="true">
+            <span
+              className="line__tag"
+              style={line.color ? { color: line.color } : undefined}
+              aria-hidden="true"
+            >
               {line.tag}
             </span>
           ) : null}

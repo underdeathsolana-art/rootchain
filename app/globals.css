@@ -231,9 +231,24 @@ button, input, textarea { font: inherit; color: inherit; }
 .line--net { border-left: 2px solid var(--ok); padding-left: 10px; margin-left: -2px; }
 .line--net .line__tag { color: var(--ok); }
 
-/* own relay lines read brighter, so "you" pop inside the green channel */
+/* own relay lines read brighter, so "you" pop inside your colour */
+.line--me { background: rgba(255, 212, 121, 0.045); }
 .line--me .line__tag,
 .line--me .line__text { color: var(--fg-bright); }
+
+/* @mentions — dotted underline; a mention of *you* lights the whole line */
+.mention { text-decoration: underline dotted; }
+.mention--me {
+  color: var(--warn);
+  font-weight: 600;
+  background: rgba(255, 209, 102, 0.14);
+  padding: 0 2px;
+}
+.line--mention { background: rgba(255, 209, 102, 0.06); }
+
+/* direct messages — dashed rose rail, private */
+.line--dm { border-left: 2px dashed #ff9ec4; padding-left: 10px; margin-left: -2px; }
+.line--dm .line__tag { color: #ff9ec4; font-style: italic; }
 
 /* live relay terminal — narrower roster than the agent split */
 .live__main { grid-template-columns: minmax(0, 1fr) 300px; }

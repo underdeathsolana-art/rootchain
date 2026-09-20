@@ -70,10 +70,18 @@ Registered users talk to each other in terminal mode:
   whose roster lists every registered user (● online / ○ offline). Typing
   there speaks directly on the relay; `who`, `clear` and `exit` work inside;
   ESC or "exit" returns to the agent terminal
-- `chat <message>` — speak on the relay from the main terminal
-  (green `[RELAY] name` lines, instant); `chat` shows who is online
-- The **Relay** side panel lists online operators; presence lives while a
-  terminal is polling (last 45s)
+- `chat <message>` — speak on the relay from the main terminal; `chat` shows
+  who is online
+- **Full history** — re-login replays the whole retained log (server caps the
+  last 200 lines)
+- **Colours** — every operator keeps a stable colour (hash of their name)
+  on their lines, tags and roster entry; your own lines carry a soft tint
+- **Mentions** — `@name` lights up in any line (names with spaces work);
+  a mention of *you* highlights the whole line
+- **Direct messages** — `dm <name> <message>` inside the live terminal
+  (`chat dm <name> <message>` from the main one). The target is matched
+  greedily against registered usernames, so multi-word names resolve; DMs
+  are visible only to sender and recipient
 - Messages are capped at 280 chars with a ~1.2s per-user cooldown; usernames
   are resolved from access codes server-side, so nobody can impersonate
   another operator
@@ -128,7 +136,8 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `status` | Terminal + module status |
 | `agents` | Latest Root / Chain exchange · `agents on` · `agents off` · `agents step` |
 | `connect` | Open the MCP connector panel — attach your own AI |
-| `chat live` | Open the live operator terminal (registered-user roster + direct chat) |
+| `chat live` | Open the live operator terminal (roster, colours, mentions, DMs) |
+| `chat dm` | Private line: `chat dm <operator> <message>` |
 | `chat` | Relay to other operators: `chat <message>` · `chat` for presence |
 | `topic` | Active topic from `content/topics/current/` |
 | `bridge` | Solana → BSC → Robinhood route map |

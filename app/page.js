@@ -7,6 +7,7 @@ import SidePanels from '@/components/sidepanels';
 import BootGate from '@/components/bootgate';
 import ConnectorPanel from '@/components/connectorpanel';
 import LiveTerminal from '@/components/liveterminal';
+import { userColor } from '@/lib/usercolor';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
@@ -27,6 +28,7 @@ const HELP_TEXT = [
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
   '  chat       relay to other operators: chat <message> · chat for presence',
+  '  chat dm    private line: chat dm <operator> <message>',
   '  chat live  open the live operator terminal (roster + direct chat)',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -133,6 +135,7 @@ export default function Page() {
         kind: line.kind || 'sys',
         agent: line.agent || null,
         tag: line.tag || null,
+        color: line.color || null,
         full: text,
         shown: instant ? text.length : 0,
         done: instant,
@@ -250,9 +253,46 @@ export default function Page() {
     setSession(null);
     setLines([]);
     bootedRef.current = false;
+    // force the next login to replay the full relay history
+    relaySyncedRef.current = false;
+    relayCursorRef.current = '';
+    setRelay({ online: [], authed: false, operators: [], store: '' });
   }, []);
 
   // ── operator relay (live chat between registered users) ─────────────────
+  const pushRelayLine = useCallback(
+    (m, operators) => {
+      const canon = (name) => {
+        const hit = (operators || []).find(
+          (o) => o.username.toLowerCase() === String(name).toLowerCase(),
+        );
+        return hit ? hit.username : name;
+      };
+
+      if (m.to) {
+        const mine = m.username === session?.username;
+        const other = mine ? canon(m.to) : canon(m.username);
+        push({
+          kind: 'dm',
+          instant: true,
+          color: userColor(mine ? m.to : m.username),
+          tag: mine ? `[DM · you » ${other}]` : `[DM · ${other} » you]`,
+          text: m.text,
+        });
+        return;
+      }
+
+      push({
+        kind: 'net',
+        instant: true,
+        color: userColor(m.username),
+        tag: `[RELAY] ${m.username}`,
+        text: m.text,
+      });
+    },
+    [push, session?.username],
+  );
+
   const pollRelay = useCallback(async () => {
     if (!session || relayBusyRef.current) return;
     relayBusyRef.current = true;
@@ -271,34 +311,24 @@ export default function Page() {
         });
         const incoming = data.messages || [];
 
-        // First poll after login: sync silently and surface only the tail of
-        // the history, so the feed is never flooded with old relay lines.
+        // First poll after login: replay the full retained history so a
+        // returning operator always sees every stored line (server caps it).
         if (!relaySyncedRef.current) {
           relaySyncedRef.current = true;
           relayCursorRef.current = data.lastCursor || '';
-          if (incoming.length > 5) {
-            push({
-              kind: 'sys',
-              text: `relay synced — showing the last 5 of ${incoming.length} recent line(s).`,
-              instant: true,
-            });
-          }
-          for (const m of incoming.slice(-5)) {
-            push({ kind: 'net', tag: `[RELAY] ${m.username}`, text: m.text, instant: true });
-          }
-        } else {
-          for (const m of incoming) {
-            push({ kind: 'net', tag: `[RELAY] ${m.username}`, text: m.text, instant: true });
-          }
-          relayCursorRef.current = data.lastCursor || relayCursorRef.current;
+          for (const m of incoming) pushRelayLine(m, data.operators);
+          return;
         }
+
+        for (const m of incoming) pushRelayLine(m, data.operators);
+        relayCursorRef.current = data.lastCursor || relayCursorRef.current;
       }
     } catch {
       /* keep previous */
     } finally {
       relayBusyRef.current = false;
     }
-  }, [session, push]);
+  }, [session, pushRelayLine]);
 
   useEffect(() => {
     if (!session) return;
@@ -556,6 +586,38 @@ export default function Page() {
             push({ kind: 'sys', text: 'opening live relay terminal…', instant: true });
             break;
           }
+          if ((rest[0] || '').toLowerCase() === 'dm') {
+            const tail = rest.slice(1).join(' ').trim();
+            if (!tail) {
+              push({ kind: 'sys', text: 'usage: chat dm <operator> <message>', speed: 6 });
+              break;
+            }
+            try {
+              const res = await fetch('/api/relay', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: session?.username, code: session?.code, dm: tail }),
+              });
+              const data = await res.json();
+              if (data.ok) {
+                relayCursorRef.current = data.cursor || relayCursorRef.current;
+                const target = data.toName || '?';
+                push({
+                  kind: 'dm',
+                  instant: true,
+                  color: userColor(target),
+                  tag: `[DM · you » ${target}]`,
+                  text: data.message.text,
+                });
+              } else {
+                const reason = String(data.error || 'try again.').replace(/\.+$/, '');
+                push({ kind: 'error', text: `relay refused — ${reason}.` });
+              }
+            } catch {
+              push({ kind: 'error', text: 'relay unreachable — is the terminal service running?' });
+            }
+            break;
+          }
           const text = rest.join(' ').trim();
           if (!text) {
             push({
@@ -579,7 +641,13 @@ export default function Page() {
             const data = await res.json();
             if (data.ok) {
               relayCursorRef.current = data.cursor || relayCursorRef.current;
-              push({ kind: 'net', tag: `[RELAY] ${session.username}`, text, instant: true });
+              push({
+                kind: 'net',
+                instant: true,
+                color: userColor(session.username),
+                tag: `[RELAY] ${session.username}`,
+                text,
+              });
             } else {
               const reason = String(data.error || 'try again.').replace(/\.+$/, '');
               const hint = /unrecognised operator code/i.test(reason)
