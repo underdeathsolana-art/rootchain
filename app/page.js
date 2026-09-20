@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import StatusBar from '@/components/StatusBar';
-import AgentFeed from '@/components/AgentFeed';
-import SidePanels from '@/components/SidePanels';
-import BootGate from '@/components/BootGate';
-import ConnectorPanel from '@/components/ConnectorPanel';
+import StatusBar from '@/components/statusbar';
+import AgentFeed from '@/components/agentfeed';
+import SidePanels from '@/components/sidepanels';
+import BootGate from '@/components/bootgate';
+import ConnectorPanel from '@/components/connectorpanel';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
