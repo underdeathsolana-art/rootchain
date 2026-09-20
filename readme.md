@@ -7,7 +7,9 @@ type into the terminal and interrogate the system directly.
 
 **No built-in model key.** Root & Chain start on the local offline engine right
 away; each user attaches their own AI through the **MCP connector** (`connect`
-command) — an MCP server or any OpenAI-compatible endpoint.
+command) — an MCP server or any OpenAI-compatible endpoint. Registered
+operators can also talk to each other live through the **relay chat**
+(`chat <message>`), rendered in the same terminal feed.
 
 ---
 
@@ -60,6 +62,20 @@ probes the endpoint before you connect.
 > form once your connector is linked (**MCP LIVE** / **API LIVE**). A failing
 > connector degrades to the local engine for that turn and explains why.
 
+### The operator relay (live chat)
+
+Registered users talk to each other in terminal mode:
+
+- `chat <message>` — speak on the relay (green `[RELAY] name` lines, instant)
+- `chat` — show who is online right now
+- The **Relay** side panel lists online operators; presence lives while a
+  terminal is polling (last 45s)
+- Messages are capped at 280 chars with a ~1.2s per-user cooldown; usernames
+  are resolved from access codes server-side, so nobody can impersonate
+  another operator
+- Delivery is a light 3s poll (`GET /api/relay?since=…`) — no WebSocket
+  needed, which keeps it working on serverless hosts
+
 ---
 
 ## How it works
@@ -77,6 +93,7 @@ Boot / login ──▶ Terminal shell ──▶ Agent loop ──▶ your AI (MC
 | `/api/topics` | GET | Reads `content/topics/{current,scheduled,archive}` from disk on every call |
 | `/api/chat` | POST | Builds one agent's turn, calls the attached connector (or local engine), returns the line (+ mode) |
 | `/api/connector` | POST | `action: test` probes a connector from the panel (validates, lists MCP tools) |
+| `/api/relay` | GET/POST | Operator live chat — poll messages + presence (`since`), send with username+code |
 | `/api/memory` | GET/POST | Reads / appends conversation memory (`type: turn \| summary \| clear`) |
 | `/api/session` | POST | `action: register` issues an access code · `action: login` verifies one |
 
@@ -95,6 +112,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `status` | Terminal + module status |
 | `agents` | Latest Root / Chain exchange · `agents on` · `agents off` · `agents step` |
 | `connect` | Open the MCP connector panel — attach your own AI |
+| `chat` | Relay to other operators: `chat <message>` · `chat` for presence |
 | `topic` | Active topic from `content/topics/current/` |
 | `bridge` | Solana → BSC → Robinhood route map |
 | `register` | Open the access-code registration panel |
@@ -115,6 +133,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | Tune the agents' voice | `lib/agents.js` — `AGENTS.*.brief` and the reply rules |
 | Extend the local offline engine | `localReply()` in `app/api/chat/route.js` |
 | Add connector link types | `lib/connector.js` (`callChatApi`, `callMcp`, `testConnector`) |
+| Tune the relay (history, cooldown, online window) | `lib/relay.js` |
 | Recolour the terminal | `app/globals.css` → the `:root` block (`--fg`, `--ch-link`, `--bg`, …) |
 | Change the header / status copy | `components/StatusBar.js` and the `<header>` in `app/page.js` |
 | Change the bridge route | `components/SidePanels.js` (bridge panel) + `BRIDGE_TEXT` in `app/page.js` |

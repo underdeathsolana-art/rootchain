@@ -11,6 +11,7 @@ const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
 const CONNECTOR_KEY = 'rootchain.connector.v1';
 const AUTO_INTERVAL = 20000;
+const RELAY_INTERVAL = 3000;
 
 const AGENT_META = {
   root: { tag: 'Agent-01', name: 'Root' },
@@ -24,6 +25,7 @@ const HELP_TEXT = [
   '  agents     show the latest Agent-01 / Agent-02 exchange',
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
+  '  chat       relay to other operators: chat <message> · chat for presence',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
   '  register   open the access-code registration panel',
@@ -80,6 +82,7 @@ export default function Page() {
   const [connector, setConnector] = useState(null);
   const [topics, setTopics] = useState({ active: null, current: [], scheduled: [], archive: [] });
   const [memory, setMemory] = useState({ summary: '', lastTopic: null, count: 0, recent: [] });
+  const [relay, setRelay] = useState({ online: [], authed: false });
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -91,6 +94,9 @@ export default function Page() {
   const nextSpeakerRef = useRef('root');
   const bootedRef = useRef(false);
   const linkWarnedRef = useRef(false);
+  const relayLastIdRef = useRef(0);
+  const relayBusyRef = useRef(false);
+  const relaySyncedRef = useRef(false);
   const reduceRef = useRef(false);
   const inputRef = useRef(null);
 
@@ -243,6 +249,60 @@ export default function Page() {
     bootedRef.current = false;
   }, []);
 
+  // ── operator relay (live chat between registered users) ─────────────────
+  const pollRelay = useCallback(async () => {
+    if (!session || relayBusyRef.current) return;
+    relayBusyRef.current = true;
+    try {
+      const params = new URLSearchParams({ since: String(relayLastIdRef.current) });
+      params.set('username', session.username);
+      params.set('code', session.code);
+      const res = await fetch(`/api/relay?${params.toString()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.ok) {
+        setRelay({ online: data.online || [], authed: Boolean(data.authed) });
+        const incoming = data.messages || [];
+
+        // First poll after login: sync silently and surface only the tail of
+        // the history, so the feed is never flooded with old relay lines.
+        if (!relaySyncedRef.current) {
+          relaySyncedRef.current = true;
+          relayLastIdRef.current = Math.max(relayLastIdRef.current, data.lastId || 0);
+          if (incoming.length > 5) {
+            push({
+              kind: 'sys',
+              text: `relay synced — showing the last 5 of ${incoming.length} recent line(s).`,
+              instant: true,
+            });
+          }
+          for (const m of incoming.slice(-5)) {
+            push({ kind: 'net', tag: `[RELAY] ${m.username}`, text: m.text, instant: true });
+          }
+        } else {
+          for (const m of incoming) {
+            relayLastIdRef.current = Math.max(relayLastIdRef.current, m.id);
+            push({ kind: 'net', tag: `[RELAY] ${m.username}`, text: m.text, instant: true });
+          }
+        }
+      }
+    } catch {
+      /* keep previous */
+    } finally {
+      relayBusyRef.current = false;
+    }
+  }, [session, push]);
+
+  useEffect(() => {
+    if (!session) return;
+    pollRelay();
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pollRelay();
+      }
+    }, RELAY_INTERVAL);
+    return () => clearInterval(id);
+  }, [session, pollRelay]);
+
   // ── agent turn ──────────────────────────────────────────────────────────
   const runAgentTurn = useCallback(
     async (forced) => {
@@ -341,6 +401,11 @@ export default function Page() {
       });
     }
     push({ kind: 'sys', text: 'type "help" to list commands', speed: 8 });
+    push({
+      kind: 'sys',
+      text: 'relay channel standing by — "chat <message>" speaks to other operators.',
+      speed: 7,
+    });
 
     const t = setTimeout(() => {
       runAgentTurn('root');
@@ -476,6 +541,40 @@ export default function Page() {
           push({ kind: 'sys', text: 'opening MCP connector…' });
           break;
 
+        case 'chat': {
+          const text = rest.join(' ').trim();
+          if (!text) {
+            push({
+              kind: 'sys',
+              text: [
+                'RELAY CHANNEL',
+                `  operators online ... ${relay.online.length ? relay.online.join(', ') : 'just you'}`,
+                '  usage ............ chat <message>',
+                '  relay lines arrive live from every connected terminal.',
+              ].join('\n'),
+              speed: 4,
+            });
+            break;
+          }
+          try {
+            const res = await fetch('/api/relay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: session?.username, code: session?.code, text }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+              relayLastIdRef.current = Math.max(relayLastIdRef.current, data.message.id);
+              push({ kind: 'net', tag: `[RELAY] ${session.username}`, text, instant: true });
+            } else {
+              push({ kind: 'error', text: `relay refused — ${data.error || 'try again.'}` });
+            }
+          } catch {
+            push({ kind: 'error', text: 'relay unreachable — is the terminal service running?' });
+          }
+          break;
+        }
+
         case 'bridge':
           push({ kind: 'sys', text: BRIDGE_TEXT, speed: 4 });
           break;
@@ -519,7 +618,7 @@ export default function Page() {
           push({ kind: 'error', text: `rootchain: command not found: ${word}. Type "help".` });
       }
     },
-    [auto, memory.count, memory.lastTopic, promptText, push, refreshMemory, refreshTopics, runAgentTurn, session, status],
+    [auto, memory.count, memory.lastTopic, promptText, push, relay.online, refreshMemory, refreshTopics, runAgentTurn, session, status],
   );
 
   function onSubmit(event) {
@@ -542,6 +641,7 @@ export default function Page() {
   const viewTabs = useMemo(
     () => [
       { id: 'feed', label: 'Channel' },
+      { id: 'relay', label: 'Relay' },
       { id: 'topics', label: 'Topics' },
       { id: 'memory', label: 'Memory' },
       { id: 'bridge', label: 'Bridge' },
@@ -638,7 +738,7 @@ export default function Page() {
           <AgentFeed lines={lines} />
         </section>
 
-        <SidePanels topics={topics} memory={memory} />
+        <SidePanels topics={topics} memory={memory} relay={relay} me={session?.username} />
       </div>
 
       <p className="sr-only" role="status" aria-live="polite">

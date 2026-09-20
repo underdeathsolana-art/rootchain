@@ -227,6 +227,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .line--agent[data-agent="root"] .line__tag { color: var(--ch-root); }
 .line--agent[data-agent="link"] .line__tag { color: var(--ch-link); }
 
+/* operator relay — the human channel (green), distinct from the amber/cyan agents */
+.line--net { border-left: 2px solid var(--ok); padding-left: 10px; margin-left: -2px; }
+.line--net .line__tag { color: var(--ok); }
+
 .line--user .line__text { color: var(--fg-bright); }
 .line--sys .line__text { color: var(--fg-dim); }
 .line--cmd .line__text { color: var(--fg); }
@@ -485,9 +489,11 @@ button, input, textarea { font: inherit; color: inherit; }
   .tabs button:focus-visible { outline: 2px solid var(--fg-bright); outline-offset: -2px; }
 
   .main[data-view="feed"] .panels { display: none; }
+  .main[data-view="relay"] .feedwrap,
   .main[data-view="topics"] .feedwrap,
   .main[data-view="memory"] .feedwrap,
   .main[data-view="bridge"] .feedwrap { display: none; }
+  .main[data-view="relay"] .panel:not([data-panel="relay"]),
   .main[data-view="topics"] .panel:not([data-panel="topics"]),
   .main[data-view="memory"] .panel:not([data-panel="memory"]),
   .main[data-view="bridge"] .panel:not([data-panel="bridge"]) { display: none; }

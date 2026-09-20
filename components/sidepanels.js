@@ -1,7 +1,8 @@
 'use client';
 
-export default function SidePanels({ topics, memory }) {
+export default function SidePanels({ topics, memory, relay, me }) {
   const activeFile = topics?.active?.file;
+  const online = relay?.online || [];
 
   return (
     <aside className="panels" aria-label="Terminal modules">
@@ -66,6 +67,36 @@ export default function SidePanels({ topics, memory }) {
               ))}
             </div>
           ) : null}
+        </div>
+      </section>
+
+      {/* ── relay (operator chat presence) ─────────────────────────────── */}
+      <section className="panel" data-panel="relay">
+        <div className="panel__head">
+          <span>Relay / operators</span>
+          <span>{online.length} online</span>
+        </div>
+        <div className="panel__body">
+          {online.length ? (
+            <ul className="filelist">
+              {online.map((name) => (
+                <li key={name} className={name === me ? 'active' : ''}>
+                  <span>
+                    {name}
+                    {name === me ? ' · you' : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mem-empty">
+              No operators on the relay right now. Speak with “chat &lt;message&gt;” — lines
+              arrive live in every connected terminal.
+            </p>
+          )}
+          <p className="mem-empty" style={{ marginTop: '10px' }}>
+            speak: <b>chat &lt;message&gt;</b> · presence: <b>chat</b>
+          </p>
         </div>
       </section>
 
