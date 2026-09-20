@@ -144,6 +144,8 @@ Works on any Node host (Vercel, a VPS, Docker). Two things to remember:
 
 1. No model key is needed on the host — every user brings their own AI through
    the connector, and credentials never touch the server's disk.
-2. `.data/` and `content/` must be writable/persistent. On serverless hosts with
-   an ephemeral filesystem, memory and registrations reset between deploys — swap
-   `lib/memory.js` / `lib/session.js` for a database if you need durability.
+2. `.data/` must be writable/persistent for memory and registrations to
+   survive. On read-only hosts (Vercel serverless) the app automatically falls
+   back to a temp dir, so it keeps working but memory resets between
+   instances — swap `lib/memory.js` / `lib/session.js` for a database if you
+   need durability.
