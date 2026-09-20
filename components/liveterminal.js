@@ -155,7 +155,11 @@ export default function LiveTerminal({ session, relay, onExit }) {
         cursorRef.current = data.cursor || cursorRef.current;
         push({ tag: `[RELAY] ${session.username}`, text: value, me: true });
       } else {
-        push({ kind: 'error', text: `relay refused — ${data.error || 'try again.'}`, me: false });
+        const reason = String(data.error || 'try again.').replace(/\.+$/, '');
+        const hint = /unrecognised operator code/i.test(reason)
+          ? ' This access code predates the database switch — exit, sign out and register again.'
+          : '';
+        push({ kind: 'error', text: `relay refused — ${reason}.${hint}`, me: false });
       }
     } catch {
       push({ kind: 'error', text: 'relay unreachable — is the terminal service running?', me: false });

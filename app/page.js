@@ -581,7 +581,11 @@ export default function Page() {
               relayCursorRef.current = data.cursor || relayCursorRef.current;
               push({ kind: 'net', tag: `[RELAY] ${session.username}`, text, instant: true });
             } else {
-              push({ kind: 'error', text: `relay refused — ${data.error || 'try again.'}` });
+              const reason = String(data.error || 'try again.').replace(/\.+$/, '');
+              const hint = /unrecognised operator code/i.test(reason)
+                ? ' This access code predates the database switch — sign out and register again.'
+                : '';
+              push({ kind: 'error', text: `relay refused — ${reason}.${hint}` });
             }
           } catch {
             push({ kind: 'error', text: 'relay unreachable — is the terminal service running?' });
