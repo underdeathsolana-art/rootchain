@@ -1,0 +1,149 @@
+# Rootchain Terminal v1.0
+
+An amber-CRT intelligence terminal. Two AI agents — **Agent-01 "Root"** and
+**Agent-02 "Chain"** — hold a continuous, memory-backed conversation about
+whatever topic you drop into `content/topics/current/`. You can watch them, or
+type into the terminal and interrogate the system directly.
+
+**No built-in model key.** Root & Chain start on the local offline engine right
+away; each user attaches their own AI through the **MCP connector** (`connect`
+command) — an MCP server or any OpenAI-compatible endpoint.
+
+---
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 14 (App Router), JavaScript |
+| UI | React 18 client components, hand-written CSS (no UI kit) |
+| Fonts | system monospace stack — no external font/asset requests |
+| State | React state + `localStorage` (session mirror + conversation mirror) |
+| Server memory | JSON files under `.data/` (memory + registered access codes) |
+| AI | Bring-your-own via the MCP connector — MCP server (Streamable HTTP) or OpenAI-compatible endpoint, proxied through `/api/chat`; local offline engine when nothing is attached |
+
+---
+
+## Run it
+
+```bash
+cd rootchain-terminal
+npm install
+npm run dev
+```
+
+Open **http://localhost:3000**. No API key or `.env` file is needed — the
+agents run on the local engine immediately.
+
+Production build:
+
+```bash
+npm run build
+npm start
+```
+
+### The MCP connector
+
+Type `connect` in the terminal (or press **Connect AI**). Two link types:
+
+| Type | Fields | Notes |
+|---|---|---|
+| **MCP server** | server URL (+ optional bearer token, tool picker) | Streamable HTTP transport. Chat-like tools are auto-detected from `tools/list`; you can pin one manually after a test. |
+| **OpenAI-compatible** | base URL, model, optional API key | Works with OpenRouter, z.ai, OpenAI, Ollama (`http://localhost:11434/v1`), LM Studio, … |
+
+Credentials live in the **browser's localStorage only** and are passed
+per-request through the server proxy (never written to disk). `Test link`
+probes the endpoint before you connect.
+
+> Without a connector the terminal answers with the local conversation engine
+> (status bar: **AI LINK: LOCAL ENGINE**); agent intelligence and memory fully
+> form once your connector is linked (**MCP LIVE** / **API LIVE**). A failing
+> connector degrades to the local engine for that turn and explains why.
+
+---
+
+## How it works
+
+```
+Boot / login ──▶ Terminal shell ──▶ Agent loop ──▶ your AI (MCP / API) ──▶ feed + memory
+     │                 │                │              │
+ localStorage       /api/topics      /api/chat    no connector? local engine
+ (session +        (reads files)    (system prompt = persona + topic + memory)
+  connector)
+```
+
+| Route | Method | What it does |
+|---|---|---|
+| `/api/topics` | GET | Reads `content/topics/{current,scheduled,archive}` from disk on every call |
+| `/api/chat` | POST | Builds one agent's turn, calls the attached connector (or local engine), returns the line (+ mode) |
+| `/api/connector` | POST | `action: test` probes a connector from the panel (validates, lists MCP tools) |
+| `/api/memory` | GET/POST | Reads / appends conversation memory (`type: turn \| summary \| clear`) |
+| `/api/session` | POST | `action: register` issues an access code · `action: login` verifies one |
+
+**Agent loop.** The client alternates speakers (Root → Chain → Root …) every
+~20s while the tab is visible, and on demand via `agents step` or the **Step**
+button. Each turn sends the recent transcript + a memory digest to `/api/chat`,
+which composes a persona-specific system prompt (see `lib/agents.js`).
+
+---
+
+## Terminal commands
+
+| Command | Result |
+|---|---|
+| `help` | List every command |
+| `status` | Terminal + module status |
+| `agents` | Latest Root / Chain exchange · `agents on` · `agents off` · `agents step` |
+| `connect` | Open the MCP connector panel — attach your own AI |
+| `topic` | Active topic from `content/topics/current/` |
+| `bridge` | Solana → BSC → Robinhood route map |
+| `register` | Open the access-code registration panel |
+| `login` | Open the access-code login panel |
+| `clear` | Wipe the buffer |
+| `about` | What Rootchain is |
+| `memory` | What the agents remember |
+
+---
+
+## Change things later
+
+| I want to… | Edit |
+|---|---|
+| Change what the agents discuss | Drop/replace `.md` or `.txt` in `content/topics/current/` — the **first file alphabetically** is the active topic. No restart needed. |
+| Retire a topic | Move the file into `content/topics/archive/` |
+| Queue tomorrow's topic | Put it in `content/topics/scheduled/` (not read until promoted) |
+| Tune the agents' voice | `lib/agents.js` — `AGENTS.*.brief` and the reply rules |
+| Extend the local offline engine | `localReply()` in `app/api/chat/route.js` |
+| Add connector link types | `lib/connector.js` (`callChatApi`, `callMcp`, `testConnector`) |
+| Recolour the terminal | `app/globals.css` → the `:root` block (`--fg`, `--ch-link`, `--bg`, …) |
+| Change the header / status copy | `components/StatusBar.js` and the `<header>` in `app/page.js` |
+| Change the bridge route | `components/SidePanels.js` (bridge panel) + `BRIDGE_TEXT` in `app/page.js` |
+| Wipe memory | Delete `.data/memory.json`, or POST `{ "type": "clear" }` to `/api/memory` |
+
+---
+
+## Quality coverage
+
+- **Responsive** — desktop split view (channel + modules); below 1024px the
+  modules move under a Channel / Topics / Memory / Bridge tab bar; down to 320px.
+- **States** — boot loader, empty feed, completed turns; `thinking` indicator;
+  transmission-error line; topic empty state; access-code error + success states.
+- **Auth** — form validation (min length, code format), busy state, `role="alert"`
+  errors, generated code with copy-to-clipboard, persisted session.
+- **Accessibility** — semantic landmarks, labelled input, `role="log"` feed,
+  visible focus rings, keyboard-operable controls, colour contrast ≥ 4.5:1 on the
+  phosphor ramp, full `prefers-reduced-motion` fallback (typing + blink disabled).
+- **No external assets** — no CDN fonts, images or icons; nothing to break offline.
+- **No invented metrics** — the bridge panel is a labelled route map, not fake live data.
+
+---
+
+## Deploy
+
+Works on any Node host (Vercel, a VPS, Docker). Two things to remember:
+
+1. No model key is needed on the host — every user brings their own AI through
+   the connector, and credentials never touch the server's disk.
+2. `.data/` and `content/` must be writable/persistent. On serverless hosts with
+   an ephemeral filesystem, memory and registrations reset between deploys — swap
+   `lib/memory.js` / `lib/session.js` for a database if you need durability.

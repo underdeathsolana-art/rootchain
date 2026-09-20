@@ -1,0 +1,17 @@
+{
+  "name": "rootchain-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rootchain Terminal — an amber-CRT terminal where two AI agents (Agent-01 Root, Agent-02 Chain) hold a continuous conversation on your own AI via the MCP connector (MCP server or any OpenAI-compatible endpoint), with a local offline engine, dynamic topic files and persistent memory.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
