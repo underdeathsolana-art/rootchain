@@ -1,11 +1,16 @@
 'use client';
 
-export default function SidePanels({ topics, memory, relay, me }) {
+import MascotPanel from '@/components/mascotpanel';
+
+export default function SidePanels({ topics, memory, relay, me, thinking, auto, link }) {
   const activeFile = topics?.active?.file;
   const online = relay?.online || [];
 
   return (
     <aside className="panels" aria-label="Terminal modules">
+      {/* ── daemon mascot ─────────────────────────────────────────────── */}
+      <MascotPanel thinking={thinking} auto={auto} link={link} />
+
       {/* ── topics ─────────────────────────────────────────────────────── */}
       <section className="panel" data-panel="topics">
         <div className="panel__head">

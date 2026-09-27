@@ -6,6 +6,7 @@ import AgentFeed from '@/components/agentfeed';
 import SidePanels from '@/components/sidepanels';
 import BootGate from '@/components/bootgate';
 import ConnectorPanel from '@/components/connectorpanel';
+import ContextEditor from '@/components/contexteditor';
 import LiveTerminal from '@/components/liveterminal';
 import { userColor } from '@/lib/usercolor';
 
@@ -27,6 +28,9 @@ const HELP_TEXT = [
   '  agents     show the latest Agent-01 / Agent-02 exchange',
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
+  '  skill      edit skill.md — how the agents behave (language, style, focus)',
+  '  readme     edit readme.md — background context for this terminal',
+  '  context    show both context files and how they shape live AI turns',
   '  chat       relay to other operators: chat <message> · chat for presence',
   '  chat dm    open a private terminal: chat dm <operator> [message]',
   '  chat live  open the live operator terminal (roster + direct chat)',
@@ -84,6 +88,7 @@ export default function Page() {
   const [authMode, setAuthMode] = useState(null); // null | 'register' | 'login'
   const [showConnector, setShowConnector] = useState(false);
   const [connector, setConnector] = useState(null);
+  const [contextFile, setContextFile] = useState(null); // null | 'skill' | 'readme'
   const [topics, setTopics] = useState({ active: null, current: [], scheduled: [], archive: [] });
   const [memory, setMemory] = useState({ summary: '', lastTopic: null, count: 0, recent: [] });
   const [relay, setRelay] = useState({ online: [], authed: false, operators: [], store: '' });
@@ -368,6 +373,8 @@ export default function Page() {
             transcript,
             memory: memoryRef.current,
             topicFile: topicsRef.current?.active?.file,
+            username: session?.username,
+            code: session?.code,
             connector: connectorRef.current,
           }),
         });
@@ -415,7 +422,7 @@ export default function Page() {
         setThinking(null);
       }
     },
-    [push, refreshMemory],
+    [push, refreshMemory, session],
   );
 
   // ── boot sequence + auto loop ───────────────────────────────────────────
@@ -430,6 +437,11 @@ export default function Page() {
       push({
         kind: 'ok',
         text: `AI connector linked — Root & Chain are running on your own AI (${connectorRef.current.model || connectorRef.current.tool || connectorRef.current.type}).`,
+        speed: 7,
+      });
+      push({
+        kind: 'sys',
+        text: 'shape how they talk — edit skill.md & readme.md with "skill" / "readme" ("context" previews both).',
         speed: 7,
       });
     } else {
@@ -580,6 +592,59 @@ export default function Page() {
           setShowConnector(true);
           push({ kind: 'sys', text: 'opening MCP connector…' });
           break;
+
+        case 'skill':
+        case 'readme': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — context files belong to an operator.' });
+            break;
+          }
+          if (!connector) {
+            push({
+              kind: 'warn',
+              text: `no AI linked yet — ${command}.md takes effect once you attach one with "connect".`,
+            });
+          }
+          setContextFile(command);
+          push({ kind: 'sys', text: `opening ${command}.md editor…`, instant: true });
+          break;
+        }
+
+        case 'context': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — context files belong to an operator.' });
+            break;
+          }
+          try {
+            const params = new URLSearchParams({ username: session.username, code: session.code });
+            const res = await fetch(`/api/context?${params.toString()}`, { cache: 'no-store' });
+            const data = await res.json();
+            if (!data.ok) {
+              push({ kind: 'error', text: `context store refused — ${data.error}` });
+              break;
+            }
+            const summary = (s) =>
+              s
+                ? `${s.length} chars · ${(s.split('\n').find((l) => l.trim()) || '(no content)').slice(0, 60)}`
+                : 'empty — edit with "skill" / "readme"';
+            push({
+              kind: 'sys',
+              text: [
+                'AGENT CONTEXT — shapes every live AI turn',
+                `  readme.md ... ${summary(data.readme)}`,
+                `  skill.md .... ${summary(data.skill)}`,
+                `  updated ..... ${data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'never'}`,
+                `  applies to .. ${status.link === 'live' ? 'LIVE AI turns (your connector is linked)' : 'live AI turns once you "connect" an AI'}`,
+                '',
+                'edit with "skill" or "readme" — skill.md overrides defaults (language, style).',
+              ].join('\n'),
+              speed: 4,
+            });
+          } catch {
+            push({ kind: 'error', text: 'context store unreachable — is the terminal service running?' });
+          }
+          break;
+        }
 
         case 'chat': {
           if ((rest[0] || '').toLowerCase() === 'live') {
@@ -744,6 +809,7 @@ export default function Page() {
   const viewTabs = useMemo(
     () => [
       { id: 'feed', label: 'Channel' },
+      { id: 'daemon', label: 'Daemon' },
       { id: 'relay', label: 'Relay' },
       { id: 'topics', label: 'Topics' },
       { id: 'memory', label: 'Memory' },
@@ -855,7 +921,15 @@ export default function Page() {
           <AgentFeed lines={lines} />
         </section>
 
-        <SidePanels topics={topics} memory={memory} relay={relay} me={session?.username} />
+        <SidePanels
+          topics={topics}
+          memory={memory}
+          relay={relay}
+          me={session?.username}
+          thinking={thinking}
+          auto={auto}
+          link={status.link}
+        />
       </div>
 
       <p className="sr-only" role="status" aria-live="polite">
@@ -909,6 +983,22 @@ export default function Page() {
         />
       ) : null}
 
+      {contextFile && session ? (
+        <ContextEditor
+          file={contextFile}
+          session={session}
+          onSaved={(file, { bytes }) => {
+            setContextFile(null);
+            push({
+              kind: 'ok',
+              text: `${file}.md saved (${bytes} chars) — the next live AI turn speaks with it.`,
+              speed: 6,
+            });
+          }}
+          onDismiss={() => setContextFile(null)}
+        />
+      ) : null}
+
       {showConnector ? (
         <ConnectorPanel
           current={connector}
@@ -926,6 +1016,11 @@ export default function Page() {
             push({
               kind: 'ok',
               text: `MCP CONNECTOR LINKED — Root & Chain now run on your own AI (${next.model || next.tool || next.type}). Intelligence and memory formation engaged.`,
+              speed: 6,
+            });
+            push({
+              kind: 'sys',
+              text: 'their behaviour is yours to set — edit skill.md & readme.md with "skill" / "readme".',
               speed: 6,
             });
             setTimeout(() => runAgentTurn(), 500);

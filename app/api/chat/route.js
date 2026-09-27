@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { callChatApi, callMcp, sanitizeConnector } from '@/lib/connector';
 import { buildSystemPrompt, AGENTS } from '@/lib/agents';
 import { readTopics, topicDigest } from '@/lib/topics';
+import { findUserByCode, readAgentContext } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,9 @@ export const dynamic = 'force-dynamic';
  *   transcript: string,
  *   memory?: string,
  *   topicFile?: string,
+ *   username?: string, code?: string,   — resolves the operator, whose
+ *                                         skill.md / readme.md are folded
+ *                                         into the system prompt
  *   connector?: { type:'openai'|'mcp', url, apiKey?, model?, tool? } | null
  * }
  * returns: { reply, mode: 'local' | 'live', source, model, error? }
@@ -30,10 +34,24 @@ export async function POST(req) {
   const memory = typeof body.memory === 'string' ? body.memory.slice(0, 2200) : '';
   const transcript = typeof body.transcript === 'string' ? body.transcript.slice(-3000) : '';
 
+  // Operator context: the skill.md / readme.md pair edited from the terminal.
+  // Anonymous or unrecognised sessions simply run without a custom context.
+  let context = {};
+  if (body.username && body.code) {
+    const user = await findUserByCode(String(body.code).toUpperCase());
+    if (user && user.username.toLowerCase() === String(body.username).trim().toLowerCase()) {
+      const stored = await readAgentContext(user.username.toLowerCase());
+      if (stored.skill || stored.readme) {
+        context = { skill: stored.skill, readme: stored.readme, username: user.username };
+      }
+    }
+  }
+
   const system = buildSystemPrompt(agentId, {
     topic: topicText,
     topicTitle: active?.title,
     memory,
+    context,
   });
 
   const connector = sanitizeConnector(body.connector);

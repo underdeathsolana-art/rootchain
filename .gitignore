@@ -16,3 +16,6 @@
 *.log
 npm-debug.log*
 .env
+
+# zcode editor artifact
+.zcodeignore
