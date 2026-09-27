@@ -5,6 +5,10 @@ import {
   listSocialPosts,
   listSocialProfiles,
   setSocialProfile,
+  followOperator,
+  unfollowOperator,
+  listFollows,
+  listOperators,
 } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
@@ -13,16 +17,17 @@ export const dynamic = 'force-dynamic';
  * Rootchain Social — the operators' feed inside the terminal.
  *
  * GET  /api/social?username=&code=
- *        -> { ok, authed, posts: [ {seq, at, username, text, replyTo} ],
- *             profiles: { lower: {username, bio, ascii} },
- *             me: {bio, ascii} | null }
- *      Reading the feed works unauthenticated; `me` and posting need a
- *      valid username+code pair.
+ *        -> { ok, rev, authed, posts, profiles, follows, me }
+ *      · posts     [ {seq, at, username, text, replyTo} ]
+ *      · profiles  { lower: {username, bio, ascii} }
+ *      · follows   { lower: { followers, following } }   — per-operator counts
+ *      · me        { bio, ascii, following: [lower…] }   — null when unauthenticated
  *
  * POST /api/social { username, code, action, ... }
- *      · action 'post'    { text }
- *      · action 'reply'   { replyTo: <seq>, text }
- *      · action 'profile' { bio? , ascii? }  — merge-update, either optional
+ *      · 'post'    { text }
+ *      · 'reply'   { replyTo: <seq>, text }
+ *      · 'profile' { bio? , ascii? }
+ *      · 'follow'  { target: <username> }   · 'unfollow' { target }
  */
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
@@ -35,16 +40,35 @@ export async function GET(req) {
     if (user && user.username.toLowerCase() === username.toLowerCase()) me = user;
   }
 
-  const [posts, profiles] = await Promise.all([listSocialPosts(), listSocialProfiles()]);
-  const mine = me ? profiles[me.username.toLowerCase()] : null;
+  const [posts, profiles, edges] = await Promise.all([listSocialPosts(), listSocialProfiles(), listFollows()]);
 
+  const follows = {};
+  const bump = (name, field) => {
+    const key = String(name).toLowerCase();
+    follows[key] = follows[key] || { followers: 0, following: 0 };
+    follows[key][field] += 1;
+  };
+  for (const e of edges) {
+    bump(e.followee, 'followers');
+    bump(e.follower, 'following');
+  }
+
+  const mine = me ? profiles[me.username.toLowerCase()] : null;
   return NextResponse.json({
     ok: true,
-    rev: 2, // deploy marker — bumped when store behaviour changes
+    rev: 3, // deploy marker — bumped when store behaviour changes
     authed: Boolean(me),
     posts,
     profiles,
-    me: mine ? { bio: mine.bio, ascii: mine.ascii } : null,
+    follows,
+    followEdges: edges,
+    me: me
+      ? {
+          bio: mine?.bio || '',
+          ascii: mine?.ascii || '',
+          following: edges.filter((e) => e.follower === me.username.toLowerCase()).map((e) => e.followee),
+        }
+      : null,
   });
 }
 
@@ -76,6 +100,21 @@ export async function POST(req) {
       ok: true,
       profile: { bio: doc.bio || '', ascii: doc.ascii || '' },
     });
+  }
+
+  if (body.action === 'follow' || body.action === 'unfollow') {
+    const targetName = String(body.target || '').trim();
+    const operators = await listOperators();
+    const match = operators.map((o) => o.username).find((name) => name.toLowerCase() === targetName.toLowerCase());
+    if (!match) {
+      return NextResponse.json({ ok: false, error: 'No registered operator by that name.' }, { status: 404 });
+    }
+    const lower = match.toLowerCase();
+    const result = body.action === 'follow'
+      ? await followOperator(user.username.toLowerCase(), lower)
+      : await unfollowOperator(user.username.toLowerCase(), lower);
+    if (!result.ok) return NextResponse.json(result, { status: 400 });
+    return NextResponse.json({ ok: true, target: match, following: result.following });
   }
 
   return NextResponse.json({ ok: false, error: 'Unknown action.' }, { status: 400 });

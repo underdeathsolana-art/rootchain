@@ -10,6 +10,7 @@ const HELP_LINES = [
   'SOCIAL COMMANDS',
   '  <text>          post to the feed',
   '  reply <id> <text>  answer post #id (aliases: r)',
+  '  follow <name>   follow an operator · unfollow <name> stops',
   '  bio <text>      set your bio · "bio" shows it',
   '  ascii           create your ASCII profile art',
   '  profile <name>  view an operator\'s profile · click the roster too',
@@ -34,7 +35,9 @@ function relTime(at) {
 export default function SocialTerminal({ session, relay, onExit }) {
   const [posts, setPosts] = useState([]);
   const [profiles, setProfiles] = useState({});
-  const [me, setMe] = useState({ bio: '', ascii: '' });
+  const [me, setMe] = useState({ bio: '', ascii: '', following: [] });
+  const [follows, setFollows] = useState({});
+  const [edges, setEdges] = useState([]);
   const [viewing, setViewing] = useState(session.username.toLowerCase());
   const [sysLines, setSysLines] = useState([]);
   const [input, setInput] = useState('');
@@ -60,6 +63,8 @@ export default function SocialTerminal({ session, relay, onExit }) {
       if (!data.ok) return;
       setPosts(data.posts || []);
       setProfiles(data.profiles || {});
+      setFollows(data.follows || {});
+      setEdges(data.followEdges || []);
       if (data.me) setMe(data.me);
     } catch {
       /* keep previous */
@@ -158,7 +163,9 @@ export default function SocialTerminal({ session, relay, onExit }) {
       const ops = relay?.operators || [];
       sys(`OPERATORS — ${ops.length} registered · ${(relay?.online || []).length} online`);
       for (const op of ops) {
-        sys(`  ${(relay?.online || []).includes(op.username) ? '●' : '○'} ${op.username} · ${postCount(op.username.toLowerCase())} post(s)`);
+        const lower = op.username.toLowerCase();
+        const stats = follows[lower] || { followers: 0 };
+        sys(`  ${(relay?.online || []).includes(op.username) ? '●' : '○'} ${op.username} · ${postCount(lower)} post(s) · ${stats.followers} follower(s)`);
       }
       return;
     }
@@ -179,6 +186,25 @@ export default function SocialTerminal({ session, relay, onExit }) {
 
     if (command === 'ascii') {
       setShowAscii(true);
+      return;
+    }
+
+    if (command === 'follow' || command === 'unfollow') {
+      const tail = value.slice(word.length).trim();
+      const { name } = resolveOperator(tail);
+      if (!name) {
+        sys(`no operator matches "${tail.split(' ')[0]}" — try "who".`, 'error');
+        return;
+      }
+      if (name.toLowerCase() === session.username.toLowerCase()) {
+        sys(command === 'follow' ? 'you already follow yourself by default.' : 'you cannot unfollow yourself.', 'error');
+        return;
+      }
+      const res = await action({ action: command, target: name });
+      if (res.ok) {
+        sys(res.data.following ? `following ${name} — their card tracks in your profile.` : `unfollowed ${name}.`, 'ok');
+        await poll();
+      }
       return;
     }
 
@@ -226,6 +252,15 @@ export default function SocialTerminal({ session, relay, onExit }) {
   const viewProfile = profiles[viewing];
   const viewName = viewProfile?.username || viewing;
   const isMe = viewing === session.username.toLowerCase();
+  const viewStats = follows[viewing] || { followers: 0, following: 0 };
+  const nameOf = (lower) => profiles[lower]?.username || operators.find((o) => o.username.toLowerCase() === lower)?.username || lower;
+  const followersOfViewing = edges.filter((e) => e.followee === viewing).map((e) => nameOf(e.follower));
+  const followingOfViewing = edges.filter((e) => e.follower === viewing).map((e) => nameOf(e.followee));
+  const iFollow = (me.following || []).includes(viewing);
+  const shortList = (names) => {
+    const shown = names.slice(0, 6).join(', ');
+    return names.length > 6 ? `${shown} +${names.length - 6} more` : shown || '—';
+  };
 
   return (
     <div className="app crt">
@@ -325,7 +360,18 @@ export default function SocialTerminal({ session, relay, onExit }) {
                 <dd style={{ color: userColor(viewName) }}>{viewName}</dd>
                 <dt>Bio</dt>
                 <dd>{viewProfile?.bio || (isMe ? 'not set — "bio <text>" writes one' : '—')}</dd>
+                <dt>Followers</dt>
+                <dd>{viewStats.followers} · {shortList(followersOfViewing)}</dd>
+                <dt>Following</dt>
+                <dd>{viewStats.following} · {shortList(followingOfViewing)}</dd>
               </dl>
+              {!isMe ? (
+                <p className="mem-empty" style={{ marginTop: '10px' }}>
+                  {iFollow
+                    ? `✓ you follow ${viewName} — "unfollow ${viewName}" stops.`
+                    : `"follow ${viewName}" adds them to your graph.`}
+                </p>
+              ) : null}
             </div>
           </section>
 
@@ -350,6 +396,7 @@ export default function SocialTerminal({ session, relay, onExit }) {
                         <span style={{ color: userColor(op.username) }}>
                           {online.includes(op.username) ? '●' : '○'} {op.username}
                           {op.username === session.username ? ' · you' : ''}
+                          {(me.following || []).includes(lower) ? ' ✦' : ''}
                         </span>
                       </li>
                     );

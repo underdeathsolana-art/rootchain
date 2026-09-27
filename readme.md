@@ -99,6 +99,10 @@ the rest of the terminal, but built for posts instead of chat:
   root of a thread and render indented under it — two levels, terminal-clean
 - **Bio** — `bio <text>` sets the one-line bio on your profile (`bio` shows
   it); max 280 chars
+- **Follow graph** — `follow <name>` follows a registered operator,
+  `unfollow <name>` stops; every profile card shows follower / following
+  counts and names, the roster marks the people you follow with ✦, and `who`
+  lists follower counts
 - **ASCII profile art** — `ascii` opens the ASCII editor: "Generate from
   name" renders your username in a built-in 5-row block font
   (`lib/asciifont.js`), then edit freely and save. The art heads your profile
