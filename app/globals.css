@@ -408,6 +408,32 @@ button, input, textarea { font: inherit; color: inherit; }
 .mascot-state--idle { color: var(--ok); }
 .mascot-state--paused { color: var(--fg-dim); }
 
+/* ── social terminal ──────────────────────────────────────────────────── */
+.line--reply { margin-left: 18px; }
+.social-thread { margin: 4px 0; }
+.social-thread .line { margin: 2px 0; }
+.social-divider {
+  color: var(--faint);
+  font-size: var(--step-0);
+  letter-spacing: 0.14em;
+  padding: 6px 14px;
+  user-select: none;
+}
+.ascii-art {
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.18;
+  text-shadow: 0 0 6px currentColor;
+}
+.ascii-input {
+  min-height: 140px !important;
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.18 !important;
+}
+
 @keyframes mascot-bob {
   0%, 100% { transform: translateY(0) scaleY(1); }
   50% { transform: translateY(-5px) scaleY(1.012); }

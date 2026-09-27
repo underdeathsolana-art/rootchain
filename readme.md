@@ -60,10 +60,14 @@ Credentials live in the **browser's localStorage only** and are passed
 per-request through the server proxy (never written to disk). `Test link`
 probes the endpoint before you connect.
 
-> Without a connector the terminal answers with the local conversation engine
-> (status bar: **AI LINK: LOCAL ENGINE**); agent intelligence and memory fully
-> form once your connector is linked (**MCP LIVE** / **API LIVE**). A failing
-> connector degrades to the local engine for that turn and explains why.
+> Without a connector the terminal answers with the **local conversation
+> engine** (status bar: **AI LINK: LOCAL ENGINE**): Root & Chain trade a slow
+> crypto poem — liquidity as tide, the FOMC as a lighthouse keeper, whales
+> under the ice, halvings as desert rain — every line answering the last,
+> continuing arc by arc across six themed suites (`lib/localdialogue.js`).
+> Agent intelligence and memory fully form once your connector is linked
+> (**MCP LIVE** / **API LIVE**). A failing connector degrades to the local
+> engine for that turn and explains why.
 
 ### Agent context files (`skill.md` / `readme.md`)
 
@@ -84,6 +88,26 @@ owns a pair of markdown files, edited right from the terminal:
   new content
 - Without a connector the files simply wait — the local offline engine has
   its fixed lines and doesn't read prompts
+
+### Rootchain Social (operator feed)
+
+Type `social` to open the operators' social terminal — a feed rendered like
+the rest of the terminal, but built for posts instead of chat:
+
+- **Post & reply** — typing posts to the feed; `reply <id> <text>` answers
+  post `#id` (the id lives in the `[P#n]` tag). Replies always attach to the
+  root of a thread and render indented under it — two levels, terminal-clean
+- **Bio** — `bio <text>` sets the one-line bio on your profile (`bio` shows
+  it); max 280 chars
+- **ASCII profile art** — `ascii` opens the ASCII editor: "Generate from
+  name" renders your username in a built-in 5-row block font
+  (`lib/asciifont.js`), then edit freely and save. The art heads your profile
+  card, glowing in your operator colour
+- **Profiles** — `profile <name>` (or click the roster) views an operator's
+  card: ASCII art, bio and post count
+- **Feed** — newest threads first, ~4s polling, 200 posts retained; posts up
+  to 500 chars, identities resolved from access codes server-side
+- `who` · `refresh` · `clear` · `exit` (or ESC) work inside the feed
 
 ### The operator relay (live chat)
 
@@ -146,6 +170,7 @@ Boot / login ──▶ Terminal shell ──▶ Agent loop ──▶ your AI (MC
 | `/api/chat` | POST | Builds one agent's turn, calls the attached connector (or local engine), returns the line (+ mode) |
 | `/api/connector` | POST | `action: test` probes a connector from the panel (validates, lists MCP tools) |
 | `/api/context` | GET/POST | The operator's `skill.md` / `readme.md` pair — read it, or save one file with username+code |
+| `/api/social` | GET/POST | Operator social feed — posts + replies + profiles (bio / ASCII art), username+code auth |
 | `/api/relay` | GET/POST | Operator live chat — poll messages + presence + registered roster (`since` cursor), send with username+code |
 | `/api/memory` | GET/POST | Reads / appends conversation memory (`type: turn \| summary \| clear`) |
 | `/api/session` | POST | `action: register` issues an access code · `action: login` verifies one |
@@ -169,6 +194,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `readme` | Edit **readme.md** — background context for this terminal |
 | `context` | Show both context files and how they shape live AI turns |
 | `chat live` | Open the live operator terminal (roster, colours, mentions, DMs) |
+| `social` | Open **Rootchain Social** — posts, replies, bio & ASCII profile art |
 | `chat dm` | Open a private terminal with an operator: `chat dm <name> [message]` |
 | `chat` | Relay to other operators: `chat <message>` · `chat` for presence |
 | `topic` | Active topic from `content/topics/current/` |
@@ -189,7 +215,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | Retire a topic | Move the file into `content/topics/archive/` |
 | Queue tomorrow's topic | Put it in `content/topics/scheduled/` (not read until promoted) |
 | Tune the agents' voice | `lib/agents.js` — `AGENTS.*.brief` and the reply rules (per-operator overrides live in the `skill.md` / `readme.md` files) |
-| Extend the local offline engine | `localReply()` in `app/api/chat/route.js` |
+| Extend the local offline engine | The themed poem suites live in `lib/localdialogue.js` (`SUITES`, `PICKUPS`); the engine is stateless — it continues from the last line of the transcript |
 | Add connector link types | `lib/connector.js` (`callChatApi`, `callMcp`, `testConnector`) |
 | Tune the relay / storage backends | `lib/store.js` (MongoDB + file fallback) |
 | Test the Mongo path locally | `node scripts/memory-mongo.js` → `MONGODB_URI=<uri> npm run dev -- -p 3200` |
