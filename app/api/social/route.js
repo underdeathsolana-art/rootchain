@@ -40,6 +40,7 @@ export async function GET(req) {
 
   return NextResponse.json({
     ok: true,
+    rev: 2, // deploy marker — bumped when store behaviour changes
     authed: Boolean(me),
     posts,
     profiles,
