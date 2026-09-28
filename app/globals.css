@@ -157,6 +157,48 @@ button, input, textarea { font: inherit; color: inherit; }
 .hdr__user { color: var(--fg); }
 .hdr__user b { color: var(--fg-bright); font-weight: 600; }
 
+/* ── pinned contract address ──────────────────────────────────────────── */
+.cabar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--well);
+  color: var(--fg);
+  font-size: var(--step-0);
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+.cabar:hover,
+.cabar:focus-visible { color: var(--fg-bright); }
+.cabar:focus-visible { outline: 2px solid var(--fg-bright); outline-offset: -2px; }
+.cabar__label {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  color: var(--fg-bright);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.cabar__addr {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(255, 176, 0, 0.25);
+}
+.cabar__hint {
+  flex: none;
+  margin-left: auto;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+}
+
 /* ── status bar ────────────────────────────────────────────────────────── */
 .statusbar {
   display: flex;
@@ -792,6 +834,8 @@ button, input, textarea { font: inherit; color: inherit; }
   .hdr { flex-wrap: wrap; gap: 6px; padding: 9px 12px; }
   .hdr__title { font-size: var(--step-2); }
   .hdr__meta { font-size: 10px; gap: 10px; }
+  .cabar { padding: 4px 12px; font-size: 10px; }
+  .cabar__hint { display: none; }
   .seg { padding: 6px 10px; font-size: 10px; }
   .tabs button { font-size: 10px; letter-spacing: 0.03em; padding: 9px 2px; }
   .composer { padding: 9px 12px; gap: 8px; }

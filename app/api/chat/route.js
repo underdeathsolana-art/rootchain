@@ -4,6 +4,7 @@ import { buildSystemPrompt, AGENTS } from '@/lib/agents';
 import { readTopics, topicDigest } from '@/lib/topics';
 import { findUserByCode, readAgentContext } from '@/lib/store';
 import { nextLocalLine } from '@/lib/localdialogue';
+import { TOKEN_CA, asksForCa, caReplyLine } from '@/lib/ca';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,20 @@ export async function POST(req) {
   const topicText = topicDigest(active);
   const memory = typeof body.memory === 'string' ? body.memory.slice(0, 2200) : '';
   const transcript = typeof body.transcript === 'string' ? body.transcript.slice(-3000) : '';
+
+  // The pinned CA: when the line being answered asks for the contract
+  // address, reply with it verbatim — no engine runs, so the answer is
+  // exact every time. Only the last line is checked, and a line that
+  // already carries the address never re-triggers the pin.
+  const lastLine = transcript.split('\n').filter((l) => l.trim()).pop() || '';
+  if (lastLine && asksForCa(lastLine) && !lastLine.includes(TOKEN_CA)) {
+    return NextResponse.json({
+      reply: caReplyLine(),
+      mode: 'local',
+      source: 'ca',
+      model: 'local',
+    });
+  }
 
   // Operator context: the skill.md / readme.md pair edited from the terminal.
   // Anonymous or unrecognised sessions simply run without a custom context.

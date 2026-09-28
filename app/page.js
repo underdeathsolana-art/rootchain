@@ -11,6 +11,7 @@ import LiveTerminal from '@/components/liveterminal';
 import SocialTerminal from '@/components/socialterminal';
 import IdeTerminal from '@/components/ideterminal';
 import { userColor } from '@/lib/usercolor';
+import { TOKEN_CA, asksForCa } from '@/lib/ca';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
@@ -26,6 +27,7 @@ const AGENT_META = {
 const HELP_TEXT = [
   'AVAILABLE COMMANDS',
   '  help       list every command',
+  '  ca         the token contract address — always the same one',
   '  status     terminal + module status',
   '  agents     show the latest Agent-01 / Agent-02 exchange',
   '             agents on | off | step  · control the live loop',
@@ -115,6 +117,7 @@ export default function Page() {
   const [mobileView, setMobileView] = useState('feed');
   const [authMode, setAuthMode] = useState(null); // null | 'register' | 'login'
   const [showConnector, setShowConnector] = useState(false);
+  const [caCopied, setCaCopied] = useState(false);
   const [connector, setConnector] = useState(null);
   const [contextFile, setContextFile] = useState(null); // null | 'skill' | 'readme'
   const [topics, setTopics] = useState({ active: null, current: [], scheduled: [], archive: [] });
@@ -521,6 +524,18 @@ export default function Page() {
   // ── commands ────────────────────────────────────────────────────────────
   const promptText = session ? `${session.username}@rootchain:~$` : 'rootchain:~$';
 
+  // Copy the pinned CA; the bar flashes COPIED, and a blocked clipboard
+  // just leaves the address readable on screen.
+  const copyCa = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(TOKEN_CA);
+      setCaCopied(true);
+      window.setTimeout(() => setCaCopied(false), 1600);
+    } catch {
+      /* clipboard unavailable — the address stays on screen */
+    }
+  }, []);
+
   const runCommand = useCallback(
     async (raw) => {
       const entered = raw;
@@ -536,6 +551,21 @@ export default function Page() {
         case 'help':
           push({ kind: 'sys', text: HELP_TEXT, speed: 4 });
           break;
+
+        case 'ca': {
+          copyCa();
+          push({
+            kind: 'ok',
+            text: [
+              'TOKEN CONTRACT ADDRESS (SOLANA)',
+              `  ${TOKEN_CA}`,
+              '',
+              'always this one, never another — it is pinned at the top of the page.',
+            ].join('\n'),
+            speed: 4,
+          });
+          break;
+        }
 
         case 'status': {
           const t = topicsRef.current;
@@ -851,10 +881,17 @@ export default function Page() {
         }
 
         default:
+          // Any typed line that asks for the contract address gets the pinned
+          // CA verbatim — the same string the header bar and "ca" print.
+          if (asksForCa(trimmed)) {
+            copyCa();
+            push({ kind: 'ok', text: `CA — ${TOKEN_CA}`, speed: 4 });
+            break;
+          }
           push({ kind: 'error', text: `rootchain: command not found: ${word}. Type "help".` });
       }
     },
-    [auto, memory.count, memory.lastTopic, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, status],
+    [auto, copyCa, memory.count, memory.lastTopic, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, status],
   );
 
   function onSubmit(event) {
@@ -967,6 +1004,12 @@ export default function Page() {
           )}
         </div>
       </header>
+
+      <button type="button" className="cabar" onClick={copyCa} title="copy the contract address">
+        <span className="cabar__label">CA</span>
+        <span className="cabar__addr">{TOKEN_CA}</span>
+        <span className="cabar__hint">{caCopied ? 'COPIED ✓' : 'CLICK TO COPY'}</span>
+      </button>
 
       <StatusBar status={{ ...status, memory: status.memory }} />
 
