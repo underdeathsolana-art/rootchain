@@ -89,7 +89,9 @@ export async function POST(req) {
           { role: 'system', content: system },
           { role: 'user', content: userTurn },
         ],
-        { temperature: 0.92, maxTokens: 300 },
+        // Reasoning models spend completion tokens thinking before the one
+        // spoken line — leave them headroom so content never truncates empty.
+        { temperature: 0.92, maxTokens: 900 },
       );
       source = 'api';
       model = connector.model;
