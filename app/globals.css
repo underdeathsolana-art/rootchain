@@ -114,6 +114,37 @@ button, input, textarea { font: inherit; color: inherit; }
   color: var(--fg-bright);
   text-shadow: 0 0 8px rgba(255, 176, 0, 0.35);
 }
+.hdr__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.hdr__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: color 0.15s ease, border-color 0.15s ease, text-shadow 0.15s ease;
+}
+.hdr__x:hover,
+.hdr__x:focus-visible {
+  color: var(--fg-bright);
+  border-color: var(--fg-bright);
+  text-shadow: 0 0 10px rgba(255, 176, 0, 0.55);
+}
+.hdr__x:focus-visible {
+  outline: 2px solid var(--fg-bright);
+  outline-offset: 2px;
+}
 .hdr__meta {
   display: flex;
   align-items: center;

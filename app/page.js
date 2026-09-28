@@ -938,7 +938,19 @@ export default function Page() {
   return (
     <div className="app crt">
       <header className="hdr">
-        <h1 className="hdr__title">Rootchain Terminal v1.0 // Secure Access</h1>
+        <div className="hdr__left">
+          <h1 className="hdr__title">Rootchain Terminal v1.0 // Secure Access</h1>
+          <a
+            className="hdr__x"
+            href="https://x.com/RTCterminal"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="@RTCterminal on X"
+            aria-label="Rootchain Terminal on X"
+          >
+            𝕏
+          </a>
+        </div>
         <div className="hdr__meta">
           {session ? (
             <>
