@@ -1,15 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  cloneRepo,
+  listRepos,
+  listWorkspace,
+  readWorkspaceFile,
+  writeWorkspaceFile,
+  removeRepo,
+} from '@/lib/ideWorkspace';
+import { runPython, runJavaScript, pipInstall } from '@/lib/runner';
 
 const HELP_LINES = [
   'ROOTIDE COMMANDS',
-  '  new <name>      start a new prompt file',
-  '  open <name>     load a saved file into the editor',
-  '  save            save the editor to the current file',
-  '  run             run the editor as a prompt (Ctrl+Enter too)',
-  '  del <name>      delete a saved file',
-  '  ls              list your files',
+  '  new <name>      start a new prompt/code file (.py/.js run as code)',
+  '  open <name>     load a saved prompt file into the editor',
+  '  wf <repo/path>  load a file from a cloned repo (click the panel too)',
+  '  save            save the editor (prompt store or workspace file)',
+  '  run             run the editor (Ctrl+Enter): .py → python, .js →',
+  '                  javascript worker, anything else → your AI',
+  '  clone <url>     git clone a public repo into your local workspace',
+  '  repos · rmrepo <name>  list / remove cloned repos',
+  '  pip install <pkg…>     install into the browser python runtime',
+  '  del <name>      delete a saved prompt file · ls lists them',
   '  exit            back to the terminal (ESC too)',
 ];
 
@@ -27,6 +40,8 @@ export default function IdeTerminal({ session, connector, onExit }) {
   const [content, setContent] = useState('');
   const [savedContent, setSavedContent] = useState('');
   const [files, setFiles] = useState([]);
+  const [repos, setRepos] = useState([]);
+  const [wsFiles, setWsFiles] = useState([]); // "repo/path" strings
   const [notice, setNotice] = useState('ROOTIDE online — write a prompt, then "run" (or Ctrl+Enter).');
   const [noticeKind, setNoticeKind] = useState('sys');
   const [output, setOutput] = useState(null); // { text, model, at, ok }
@@ -37,6 +52,7 @@ export default function IdeTerminal({ session, connector, onExit }) {
   const bootedRef = useRef(false);
   const contentRef = useRef('');
   const nameRef = useRef(UNTITLED);
+  const targetRef = useRef({ type: 'untitled' }); // { type:'untitled'|'prompt'|'ws', id }
 
   useEffect(() => {
     contentRef.current = content;
@@ -61,10 +77,21 @@ export default function IdeTerminal({ session, connector, onExit }) {
     }
   }, [session.code, session.username]);
 
+  const refreshWorkspace = useCallback(async () => {
+    try {
+      const [names, all] = await Promise.all([listRepos(session.username), listWorkspace(session.username)]);
+      setRepos(names || []);
+      setWsFiles(all || []);
+    } catch {
+      /* workspace unavailable (SSR guard) — ignore */
+    }
+  }, [session.username]);
+
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
     refreshFiles();
+    refreshWorkspace();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -84,12 +111,13 @@ export default function IdeTerminal({ session, connector, onExit }) {
         return false;
       }
       if (!data.file) {
-        say(`no file named "${name}" — "new ${name}" creates one.`, 'error');
+        say(`no prompt file named "${name}" — try "wf" for repo files, or "new ${name}".`, 'error');
         return false;
       }
       setFileName(data.file.name);
       setContent(data.file.content || '');
       setSavedContent(data.file.content || '');
+      targetRef.current = { type: 'prompt', id: data.file.name };
       setOutput(null);
       say(`loaded ${data.file.name} (${(data.file.content || '').length} chars).`);
       return true;
@@ -99,13 +127,36 @@ export default function IdeTerminal({ session, connector, onExit }) {
     }
   }
 
-  async function save() {
-    const name = nameRef.current === UNTITLED ? null : nameRef.current;
-    if (!name) {
-      say('name the file first — "new <name>" then "save".', 'error');
-      return;
-    }
+  async function openWorkspaceFile(path) {
     try {
+      const body = await readWorkspaceFile(session.username, path);
+      setFileName(path);
+      setContent(body);
+      setSavedContent(body);
+      targetRef.current = { type: 'ws', id: path };
+      setOutput(null);
+      say(`loaded workspace file ${path} (${body.length} chars).`);
+      return true;
+    } catch (err) {
+      say(String(err.message || err), 'error');
+      return false;
+    }
+  }
+
+  async function save() {
+    const target = targetRef.current;
+    try {
+      if (target.type === 'ws') {
+        const path = await writeWorkspaceFile(session.username, target.id, contentRef.current);
+        setSavedContent(contentRef.current);
+        say(`saved workspace file ${path}.`, 'ok');
+        return;
+      }
+      const name = target.type === 'prompt' ? target.id : null;
+      if (!name) {
+        say('name the file first — "new <name>" then "save".', 'error');
+        return;
+      }
       const res = await fetch('/api/ide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,24 +170,60 @@ export default function IdeTerminal({ session, connector, onExit }) {
       setSavedContent(contentRef.current);
       say(`saved ${name} (${data.file.size} chars).`, 'ok');
       refreshFiles();
-    } catch {
-      say('ide store unreachable — is the terminal service running?', 'error');
+    } catch (err) {
+      say(String(err.message || err) || 'save failed.', 'error');
     }
   }
 
   async function run() {
-    const prompt = contentRef.current;
-    if (!prompt.trim()) {
+    const code = contentRef.current;
+    if (!code.trim()) {
       say('nothing to run — the editor is empty.', 'error');
       return;
     }
+
+    const name = nameRef.current.toLowerCase();
+    if (name.endsWith('.py')) {
+      setRunning(true);
+      setOutput({ text: 'starting python…', model: 'python (pyodide, in your browser)', at: Date.now(), ok: true, pending: true });
+      try {
+        const text = await runPython(code, (s) => say(s));
+        setOutput({ text: text || '(no output)', model: 'python (pyodide, in your browser)', at: Date.now(), ok: true });
+        say('python run complete.', 'ok');
+      } catch (err) {
+        const msg = String(err.message || err);
+        setOutput({ text: msg, model: 'python', at: Date.now(), ok: false });
+        say('python run failed.', 'error');
+      } finally {
+        setRunning(false);
+      }
+      return;
+    }
+
+    if (name.endsWith('.js') || name.endsWith('.mjs')) {
+      setRunning(true);
+      setOutput({ text: 'running javascript…', model: 'javascript (browser worker)', at: Date.now(), ok: true, pending: true });
+      try {
+        const text = await runJavaScript(code);
+        setOutput({ text, model: 'javascript (browser worker)', at: Date.now(), ok: true });
+        say('javascript run complete.', 'ok');
+      } catch (err) {
+        setOutput({ text: String(err.message || err), model: 'javascript', at: Date.now(), ok: false });
+        say('javascript run failed.', 'error');
+      } finally {
+        setRunning(false);
+      }
+      return;
+    }
+
+    // Anything else runs as a prompt against the operator's own AI.
     setRunning(true);
     setOutput({ text: 'running…', model: '', at: Date.now(), ok: true, pending: true });
     try {
       const res = await fetch('/api/ide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: session.username, code: session.code, action: 'run', content: prompt, connector }),
+        body: JSON.stringify({ username: session.username, code: session.code, action: 'run', content: code, connector }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -173,7 +260,9 @@ export default function IdeTerminal({ session, connector, onExit }) {
       return;
     }
     if (command === 'ls' || command === 'files') {
-      say(files.length ? `your files — ${files.map((f) => `${f.name} (${f.size}b)`).join(', ')}` : 'no files yet — "new <name>" starts one.');
+      const prompts = files.length ? files.map((f) => f.name).join(', ') : 'none';
+      const cloned = repos.length ? repos.join(', ') : 'none';
+      say(`prompt files — ${prompts} · cloned repos — ${cloned}`);
       return;
     }
     if (command === 'new') {
@@ -184,9 +273,86 @@ export default function IdeTerminal({ session, connector, onExit }) {
       setFileName(tail.toLowerCase());
       setContent('');
       setSavedContent('');
+      targetRef.current = { type: 'untitled' };
       setOutput(null);
-      say(`new file "${tail.toLowerCase()}" — write the prompt, then "save".`);
+      say(`new file "${tail.toLowerCase()}" — .py/.js run as code, anything else runs as a prompt.`);
       areaRef.current?.focus();
+      return;
+    }
+    if (command === 'clone') {
+      if (!tail) {
+        say('usage: clone https://github.com/user/repo', 'error');
+        return;
+      }
+      setRunning(true);
+      say(`cloning ${tail} — public repos, depth 1…`);
+      try {
+        const result = await cloneRepo(session.username, tail);
+        if (!result.ok) {
+          say(result.error, 'error');
+          return;
+        }
+        await refreshWorkspace();
+        say(`cloned "${result.repo}" — ${result.files} file(s) in your local workspace. "wf ${result.repo}/<path>" opens one.`, 'ok');
+      } catch (err) {
+        say(`clone failed — ${String(err.message || err).slice(0, 160)}`, 'error');
+      } finally {
+        setRunning(false);
+      }
+      return;
+    }
+    if (command === 'repos') {
+      say(repos.length ? `cloned repos — ${repos.join(', ')}` : 'no repos cloned yet — "clone <url>" fetches one into this browser.');
+      return;
+    }
+    if (command === 'rmrepo') {
+      if (!tail) {
+        say('usage: rmrepo <name>', 'error');
+        return;
+      }
+      try {
+        const result = await removeRepo(session.username, tail);
+        if (!result.ok) {
+          say(result.error, 'error');
+          return;
+        }
+        if (targetRef.current.type === 'ws' && targetRef.current.id.startsWith(`${result.removed}/`)) {
+          setFileName(UNTITLED);
+          setContent('');
+          setSavedContent('');
+          targetRef.current = { type: 'untitled' };
+        }
+        await refreshWorkspace();
+        say(`removed ${result.removed}.`, 'ok');
+      } catch (err) {
+        say(String(err.message || err), 'error');
+      }
+      return;
+    }
+    if (command === 'wf') {
+      if (!tail) {
+        say(wsFiles.length ? `workspace files — ${wsFiles.slice(0, 12).join(', ')}${wsFiles.length > 12 ? ' …' : ''}` : 'workspace empty — "clone <url>" first.');
+        return;
+      }
+      if (await openWorkspaceFile(tail.replace(/^\/+/, ''))) areaRef.current?.focus();
+      return;
+    }
+    if (command === 'pip') {
+      const pkgs = value.split(/\s+/).slice(1);
+      if (!pkgs.length || (pkgs[0] || '').toLowerCase() === 'install' && pkgs.length < 2) {
+        say('usage: pip install <package> [more…]', 'error');
+        return;
+      }
+      const list = (pkgs[0] || '').toLowerCase() === 'install' ? pkgs.slice(1) : pkgs;
+      setRunning(true);
+      try {
+        const installed = await pipInstall(list, (s) => say(s));
+        say(`installed ${installed.join(', ')} into the browser python runtime.`, 'ok');
+      } catch (err) {
+        say(`pip failed — ${String(err.message || err).slice(0, 160)}`, 'error');
+      } finally {
+        setRunning(false);
+      }
       return;
     }
     if (command === 'open') {
@@ -226,6 +392,7 @@ export default function IdeTerminal({ session, connector, onExit }) {
           setFileName(UNTITLED);
           setContent('');
           setSavedContent('');
+          targetRef.current = { type: 'untitled' };
         }
         say(`deleted ${tail}.`, 'ok');
         refreshFiles();
@@ -314,7 +481,7 @@ export default function IdeTerminal({ session, connector, onExit }) {
                   {files.map((f) => (
                     <li
                       key={f.name}
-                      className={f.name === fileName ? 'active' : ''}
+                      className={targetRef.current.type === 'prompt' && f.name === fileName ? 'active' : ''}
                       style={{ cursor: 'pointer' }}
                       title={`open ${f.name}`}
                       onClick={() => openFile(f.name)}
@@ -331,6 +498,36 @@ export default function IdeTerminal({ session, connector, onExit }) {
             </div>
           </section>
 
+          <section className="panel" data-panel="workspace">
+            <div className="panel__head">
+              <span>Workspace (cloned)</span>
+              <span>{repos.length} repo(s)</span>
+            </div>
+            <div className="panel__body">
+              {repos.length ? (
+                <ul className="filelist">
+                  {wsFiles.slice(0, 120).map((path) => (
+                    <li
+                      key={path}
+                      className={targetRef.current.type === 'ws' && path === fileName ? 'active' : ''}
+                      style={{ cursor: 'pointer' }}
+                      title={`open ${path}`}
+                      onClick={() => openWorkspaceFile(path)}
+                    >
+                      <span>{path}</span>
+                    </li>
+                  ))}
+                  {wsFiles.length > 120 ? <li className="mem-empty">+{wsFiles.length - 120} more…</li> : null}
+                </ul>
+              ) : (
+                <p className="mem-empty">
+                  Empty — "clone &lt;github url&gt;" pulls a public repo into
+                  this browser. Python/JS runtimes stay local to you too.
+                </p>
+              )}
+            </div>
+          </section>
+
           <section className="panel" data-panel="hints">
             <div className="panel__head">
               <span>Commands</span>
@@ -339,7 +536,7 @@ export default function IdeTerminal({ session, connector, onExit }) {
             <div className="panel__body">
               {HELP_LINES.slice(1).map((l) => (
                 <p key={l} className="mem-empty" style={{ margin: '0 0 4px' }}>
-                  {l}
+                  {l.trim() ? l : '\u00a0'}
                 </p>
               ))}
             </div>

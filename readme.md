@@ -113,19 +113,36 @@ the rest of the terminal, but built for posts instead of chat:
   to 500 chars, identities resolved from access codes server-side
 - `who` · `refresh` · `clear` · `exit` (or ESC) work inside the feed
 
-### ROOTIDE (online prompt IDE)
+### ROOTIDE (online prompt IDE + local workspace)
 
-Type `ide` (or `rootide`) for the prompt IDE: write prompts in the
-terminal-styled editor, save them as named files against your access code,
-and **run them online against your own linked AI** — the same OpenAI-compatible
-/ MCP connector that powers Root & Chain (keys stay in your browser; runs are
-proxied server-side, in memory only).
+Type `ide` (or `rootide`) for ROOTIDE. It has two sides:
+
+**Prompt side** — write prompts in the terminal-styled editor, save them as
+named files against your access code, and **run them online against your own
+linked AI** (same OpenAI-compatible / MCP connector as the agents; keys stay
+in your browser, runs are proxied server-side, in memory only).
+
+**Workspace side — everything stays in the operator's browser:**
+
+- `clone https://github.com/user/repo` — git clone a **public repo**
+  (isomorphic-git, depth 1, via the community CORS proxy) into a virtual
+  filesystem in your browser's IndexedDB — one database per operator, so
+  what you clone stays with the user and never touches the server
+- `repos` / `rmrepo <name>` — list / remove clones; `wf <repo/path>` (or the
+  workspace panel) opens a cloned file in the editor, `save` writes it back
+- **Python runtime** — files ending `.py` run on Pyodide (WASM CPython),
+  downloaded from the CDN on first use and then cached by your browser:
+  "installing python" is literal and local. `pip install <pkg…>` maps to
+  micropip (pure-Python / WASM wheels)
+- **JavaScript runtime** — `.js` / `.mjs` files run in a sandboxed Web Worker
+  with `console.log` capture and a 10s timeout (browser JS, not Node — no
+  npm / native modules)
+- `run` (or **Ctrl+Enter**) routes by extension: `.py` → python,
+  `.js` → javascript worker, anything else → your AI
 
 - `new <name>` / `open <name>` / `save` / `del <name>` / `ls` — manage up to
   20 prompt files (8 000 chars each) per operator
-- `run` — or **Ctrl+Enter** — executes the editor as a prompt; the answer
-  lands in the output panel with the model that produced it
-- Without a connector, running tells you to `connect` one first
+- Without a connector, running a prompt tells you to `connect` one first
 - The header marks unsaved edits with `●`; ESC exits back to the terminal
 
 ### The operator relay (live chat)

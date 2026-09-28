@@ -10,6 +10,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.10.3",
+    "isomorphic-git": "^1.42.3",
     "mongodb": "^7.6.0",
     "next": "14.2.35",
     "react": "18.3.1",
