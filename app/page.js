@@ -9,6 +9,7 @@ import ConnectorPanel from '@/components/connectorpanel';
 import ContextEditor from '@/components/contexteditor';
 import LiveTerminal from '@/components/liveterminal';
 import SocialTerminal from '@/components/socialterminal';
+import IdeTerminal from '@/components/ideterminal';
 import { userColor } from '@/lib/usercolor';
 
 const SESSION_KEY = 'rootchain.session.v1';
@@ -36,6 +37,7 @@ const HELP_TEXT = [
   '  chat dm    open a private terminal: chat dm <operator> [message]',
   '  chat live  open the live operator terminal (roster + direct chat)',
   '  social     open Rootchain Social — posts, replies, bio & ASCII profile',
+  '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
   '  register   open the access-code registration panel',
@@ -97,6 +99,7 @@ export default function Page() {
   const [liveMode, setLiveMode] = useState(false);
   const [liveChannel, setLiveChannel] = useState('relay');
   const [socialMode, setSocialMode] = useState(false);
+  const [ideMode, setIdeMode] = useState(false);
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -596,6 +599,17 @@ export default function Page() {
           push({ kind: 'sys', text: 'opening MCP connector…' });
           break;
 
+        case 'ide':
+        case 'rootide': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — ROOTIDE files belong to an operator.' });
+            break;
+          }
+          setIdeMode(true);
+          push({ kind: 'sys', text: 'opening ROOTIDE…', instant: true });
+          break;
+        }
+
         case 'social': {
           if (!session) {
             push({ kind: 'error', text: 'register or log in first — the feed belongs to operators.' });
@@ -843,6 +857,16 @@ export default function Page() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (ideMode && session) {
+    return (
+      <IdeTerminal
+        session={session}
+        connector={connector}
+        onExit={() => setIdeMode(false)}
+      />
     );
   }
 

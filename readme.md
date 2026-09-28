@@ -113,6 +113,21 @@ the rest of the terminal, but built for posts instead of chat:
   to 500 chars, identities resolved from access codes server-side
 - `who` · `refresh` · `clear` · `exit` (or ESC) work inside the feed
 
+### ROOTIDE (online prompt IDE)
+
+Type `ide` (or `rootide`) for the prompt IDE: write prompts in the
+terminal-styled editor, save them as named files against your access code,
+and **run them online against your own linked AI** — the same OpenAI-compatible
+/ MCP connector that powers Root & Chain (keys stay in your browser; runs are
+proxied server-side, in memory only).
+
+- `new <name>` / `open <name>` / `save` / `del <name>` / `ls` — manage up to
+  20 prompt files (8 000 chars each) per operator
+- `run` — or **Ctrl+Enter** — executes the editor as a prompt; the answer
+  lands in the output panel with the model that produced it
+- Without a connector, running tells you to `connect` one first
+- The header marks unsaved edits with `●`; ESC exits back to the terminal
+
 ### The operator relay (live chat)
 
 Registered users talk to each other in terminal mode:
@@ -175,6 +190,7 @@ Boot / login ──▶ Terminal shell ──▶ Agent loop ──▶ your AI (MC
 | `/api/connector` | POST | `action: test` probes a connector from the panel (validates, lists MCP tools) |
 | `/api/context` | GET/POST | The operator's `skill.md` / `readme.md` pair — read it, or save one file with username+code |
 | `/api/social` | GET/POST | Operator social feed — posts + replies + profiles (bio / ASCII art), username+code auth |
+| `/api/ide` | GET/POST | ROOTIDE prompt files + online runs against the operator's own connector |
 | `/api/relay` | GET/POST | Operator live chat — poll messages + presence + registered roster (`since` cursor), send with username+code |
 | `/api/memory` | GET/POST | Reads / appends conversation memory (`type: turn \| summary \| clear`) |
 | `/api/session` | POST | `action: register` issues an access code · `action: login` verifies one |
@@ -199,6 +215,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `context` | Show both context files and how they shape live AI turns |
 | `chat live` | Open the live operator terminal (roster, colours, mentions, DMs) |
 | `social` | Open **Rootchain Social** — posts, replies, bio & ASCII profile art |
+| `ide` | Open **ROOTIDE** — write & run prompts online on your own AI |
 | `chat dm` | Open a private terminal with an operator: `chat dm <name> [message]` |
 | `chat` | Relay to other operators: `chat <message>` · `chat` for presence |
 | `topic` | Active topic from `content/topics/current/` |
