@@ -30,6 +30,7 @@ const HELP_TEXT = [
   '  agents     show the latest Agent-01 / Agent-02 exchange',
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
+  '  disconnect detach your AI — Root & Chain return to the local engine',
   '  skill      edit skill.md — how the agents behave (language, style, focus)',
   '  readme     edit readme.md — background context for this terminal',
   '  context    show both context files and how they shape live AI turns',
@@ -599,6 +600,23 @@ export default function Page() {
           push({ kind: 'sys', text: 'opening MCP connector…' });
           break;
 
+        case 'disconnect': {
+          if (!connector) {
+            push({ kind: 'error', text: 'no AI linked — nothing to detach. "connect" attaches one.' });
+            break;
+          }
+          connectorRef.current = null;
+          setConnector(null);
+          try {
+            window.localStorage.removeItem(CONNECTOR_KEY);
+          } catch {
+            /* ignore */
+          }
+          setStatus((s) => ({ ...s, link: 'local', source: 'local', model: 'local', error: '' }));
+          push({ kind: 'sys', text: 'AI connector detached — the key is wiped from this browser and Root & Chain return to the local engine.' });
+          break;
+        }
+
         case 'ide':
         case 'rootide': {
           if (!session) {
@@ -940,11 +958,20 @@ export default function Page() {
                 : `Agent channel — ${auto ? 'live loop' : 'paused'}`}
             </span>
             <span className="feedwrap__actions">
-              {!connector ? (
+              {connector ? (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => setShowConnector(true)}
+                  title="manage / disconnect the linked AI"
+                >
+                  AI {connector.model || connector.tool || connector.type} · manage
+                </button>
+              ) : (
                 <button type="button" className="btn btn--sm" onClick={() => setShowConnector(true)}>
                   Connect AI
                 </button>
-              ) : null}
+              )}
               <button
                 type="button"
                 className="btn btn--sm"

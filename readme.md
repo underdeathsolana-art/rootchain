@@ -227,6 +227,7 @@ which composes a persona-specific system prompt (see `lib/agents.js`).
 | `status` | Terminal + module status |
 | `agents` | Latest Root / Chain exchange · `agents on` · `agents off` · `agents step` |
 | `connect` | Open the MCP connector panel — attach your own AI |
+| `disconnect` | Detach your AI (key wiped from the browser) — back to the local engine; the channel bar's "AI · manage" button opens the same panel |
 | `skill` | Edit **skill.md** — behaviour of the agents on live AI turns |
 | `readme` | Edit **readme.md** — background context for this terminal |
 | `context` | Show both context files and how they shape live AI turns |
