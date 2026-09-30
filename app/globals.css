@@ -423,13 +423,18 @@ button, input, textarea { font: inherit; color: inherit; }
   background: var(--well);
   overflow: hidden;
 }
-.mascot img {
+.mascot__art {
   display: block;
-  width: 100%;
-  height: auto;
+  margin: 0;
+  padding: 12px 8px;
+  white-space: pre;
+  overflow-x: auto;
+  font-size: 11.5px;
+  line-height: 1.12;
+  color: var(--fg);
+  text-shadow: 0 0 7px rgba(255, 176, 0, 0.38);
   user-select: none;
-  /* the artwork is green phosphor — retune it onto the terminal's amber ramp */
-  filter: grayscale(1) sepia(1) hue-rotate(-14deg) saturate(2.6) brightness(0.92) contrast(1.06);
+  scrollbar-width: none;
   animation:
     mascot-bob 4.2s ease-in-out infinite,
     mascot-flicker 7s steps(1) infinite;
@@ -578,19 +583,21 @@ button, input, textarea { font: inherit; color: inherit; }
   50% { opacity: 0.9; }
 }
 
-/* thinking — the daemon leans in: fast bob, hot phosphor, tight scan */
-.mascot[data-state='thinking'] img {
+/* thinking — the mark leans in: fast bob, hot phosphor, tight scan */
+.mascot[data-state='thinking'] .mascot__art {
   animation-duration: 1.1s, 2.8s;
-  filter: grayscale(1) sepia(1) hue-rotate(-14deg) saturate(3.1) brightness(1.02) contrast(1.08);
+  color: var(--fg-bright);
+  text-shadow: 0 0 9px rgba(255, 209, 121, 0.55);
 }
 .mascot[data-state='thinking'] .mascot__scan { animation-duration: 1.8s; }
 .mascot[data-state='thinking'] .mascot__glow { opacity: 1; }
 
 /* paused — dims and settles; the scan and glow go dark */
-.mascot[data-state='paused'] img {
+.mascot[data-state='paused'] .mascot__art {
   animation: none;
   opacity: 0.55;
-  filter: grayscale(0.7) sepia(1) hue-rotate(-14deg) saturate(1.4) brightness(0.8);
+  color: var(--fg-dim);
+  text-shadow: 0 0 5px rgba(255, 176, 0, 0.2);
 }
 .mascot[data-state='paused'] .mascot__scan,
 .mascot[data-state='paused'] .mascot__glow { animation: none; opacity: 0; }
