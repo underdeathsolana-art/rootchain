@@ -10,8 +10,10 @@ import ContextEditor from '@/components/contexteditor';
 import LiveTerminal from '@/components/liveterminal';
 import SocialTerminal from '@/components/socialterminal';
 import IdeTerminal from '@/components/ideterminal';
+import MarketTerminal from '@/components/marketterminal';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
+import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
@@ -40,6 +42,7 @@ const HELP_TEXT = [
   '  chat dm    open a private terminal: chat dm <operator> [message]',
   '  chat live  open the live operator terminal (roster + direct chat)',
   '  social     open Rootchain Social — posts, replies, bio & ASCII profile',
+  '  dexview    open the DEX chart for the token — dexview <link|pool|CA>',
   '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -70,6 +73,8 @@ const ABOUT_TEXT = [
   '  "chat live" is the full operator terminal with presence + colours.',
   '  "social" opens Rootchain Social — posts, threaded replies, bio,',
   '  ASCII profile art and a follow graph between operators.',
+  '  "dexview" opens the DEX chart for the token — live candles, pair',
+  '  stats and a comment wall where operators call the chart together.',
   '',
   'ROOTIDE',
   '  "ide" opens an online prompt IDE on your own AI — prompt files,',
@@ -127,6 +132,7 @@ export default function Page() {
   const [liveChannel, setLiveChannel] = useState('relay');
   const [socialMode, setSocialMode] = useState(false);
   const [ideMode, setIdeMode] = useState(false);
+  const [marketPair, setMarketPair] = useState(null); // null | pool address — dexview is open
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -691,6 +697,26 @@ export default function Page() {
           break;
         }
 
+        case 'dexview':
+        case 'market': {
+          const arg = rest.join(' ');
+          if (arg) {
+            const addr = parseMarketArg(arg);
+            if (!addr) {
+              push({
+                kind: 'error',
+                text: 'could not read that — paste a dexscreener link, a pool address or a token CA.',
+              });
+              break;
+            }
+            setMarketPair(addr);
+          } else {
+            setMarketPair(DEFAULT_PAIR);
+          }
+          push({ kind: 'sys', text: 'opening the dex view…', instant: true });
+          break;
+        }
+
         case 'skill':
         case 'readme': {
           if (!session) {
@@ -968,6 +994,17 @@ export default function Page() {
           setLiveMode(false);
           setLiveChannel('relay');
         }}
+      />
+    );
+  }
+
+  // dexview is public — guests may watch the chart and read the wall
+  if (marketPair) {
+    return (
+      <MarketTerminal
+        session={session}
+        initialPair={marketPair}
+        onExit={() => setMarketPair(null)}
       />
     );
   }
