@@ -520,7 +520,15 @@ button, input, textarea { font: inherit; color: inherit; }
   min-height: 0;
 }
 .mkt__left { display: block; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--faint) transparent; }
-.mkt__right { grid-template-rows: auto minmax(0, 1fr) auto; border-right: 0; border-left: 1px solid var(--border); }
+/* the wall's implicit grid column must clamp to the panel — an auto track
+   sizes to the bar's max-content and spills 60px past the viewport */
+.mkt__right {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+.mkt__right .log, .mkt__right .feedwrap__bar { min-width: 0; }
 
 .mkt__head {
   display: flex;
@@ -629,9 +637,16 @@ button, input, textarea { font: inherit; color: inherit; }
 .mkt .line__meta { color: var(--faint); font-size: var(--step-0); }
 
 @media (max-width: 980px) {
-  .mkt { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  /* document flow: sections stack to full height and the whole page scrolls —
+     a squeezed grid row here made the stats bleed over the wall panel */
+  .mkt { display: block; overflow-y: auto; }
   .mkt__left { border-right: 0; overflow-y: visible; }
-  .mkt__right { border-left: 0; border-top: 1px solid var(--border); min-height: 340px; }
+  .mkt__right {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    min-height: 72vh; /* the wall is a self-contained box: log scrolls, composer stays put */
+  }
+  .mkt__tf { flex-wrap: wrap; row-gap: 4px; }
   .mkt__gauges { grid-template-columns: 1fr; }
 }
 
@@ -971,6 +986,9 @@ button, input, textarea { font: inherit; color: inherit; }
   .composer { padding: 9px 12px; gap: 8px; }
   .composer__hint { display: none; }
   .kv { grid-template-columns: 88px minmax(0, 1fr); }
+  .mkt__tfsrc { display: none; }        /* six timeframe buttons need the row */
+  .mkt__price { font-size: 22px; }
+  .stat--wide { grid-column: auto; }    /* single-column stat rows must not span */
 }
 
 @media (prefers-reduced-motion: reduce) {
