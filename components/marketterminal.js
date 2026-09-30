@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { userColor } from '@/lib/usercolor';
 import { DEFAULT_PAIR, DEFAULT_TF, TIMEFRAMES } from '@/lib/market';
 
-const PAIR_POLL = 20_000;
-const CANDLE_POLL = 60_000;
+const PAIR_POLL = 15_000;
+const CANDLE_POLL = 15_000;
 const COMMENT_POLL = 4000;
 
 const WINDOWS = ['m5', 'h1', 'h6', 'h24'];
