@@ -11,6 +11,7 @@ import LiveTerminal from '@/components/liveterminal';
 import SocialTerminal from '@/components/socialterminal';
 import IdeTerminal from '@/components/ideterminal';
 import MarketTerminal from '@/components/marketterminal';
+import LoomTerminal from '@/components/loomterminal';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
 import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
@@ -50,6 +51,8 @@ const HELP_TEXT = [
   '  alert      arm a price alert — alert rtc > 0.00002 fires when crossed',
   '             alert del <n> · alert clear · checked live every 15 seconds',
   '  watch      token watchlist — watch add <ca|link|pool> · watch del <n>',
+  '  loom       open the LOOM — branching text weaver on your own AI',
+  '             (needs "connect" — bring any API key; free endpoints work)',
   '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -93,6 +96,12 @@ const ABOUT_TEXT = [
 '  "alert rtc > 0.00002" arms a one-shot alert — the terminal checks the',
 '  live feed every 15 seconds and prints a ⚡ line the moment it crosses.',
 '  "watch add <ca>" keeps live prices for any tokens you follow.',
+'',
+'LOOM WEAVE',
+'  "loom" opens the branching text explorer: seed a text, "w" grows k',
+'  candidate continuations from your linked AI, pick one and keep weaving —',
+'  branch, rewind, edit and bookmark nodes of the story-tree. Weaves save',
+'  under your operator. Terminal-native take on Loom / universal-weave.',
   '',
   'ROOTIDE',
   '  "ide" opens an online prompt IDE on your own AI — prompt files,',
@@ -151,6 +160,7 @@ export default function Page() {
   const [socialMode, setSocialMode] = useState(false);
   const [ideMode, setIdeMode] = useState(false);
   const [marketPair, setMarketPair] = useState(null); // null | pool address — dexview is open
+  const [loomMode, setLoomMode] = useState(false);
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -945,6 +955,22 @@ export default function Page() {
           break;
         }
 
+        case 'loom': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — weaves belong to an operator.' });
+            break;
+          }
+          if (!connector) {
+            push({
+              kind: 'warn',
+              text: 'the loom weaves on your own AI — type "connect" and attach any API key first (OpenAI-compatible endpoints and MCP servers both work, free ones included).',
+            });
+          }
+          setLoomMode(true);
+          push({ kind: 'sys', text: 'opening the loom…', instant: true });
+          break;
+        }
+
         case 'bridge':
           push({ kind: 'sys', text: BRIDGE_TEXT, speed: 4 });
           break;
@@ -1164,6 +1190,16 @@ export default function Page() {
           setLiveMode(false);
           setLiveChannel('relay');
         }}
+      />
+    );
+  }
+
+  if (loomMode && session) {
+    return (
+      <LoomTerminal
+        session={session}
+        connector={connector}
+        onExit={() => setLoomMode(false)}
       />
     );
   }
