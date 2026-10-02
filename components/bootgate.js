@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { maskCode } from '@/lib/format';
 
 export default function BootGate({ initialMode = 'register', onAuthed, onDismiss }) {
   const [mode, setMode] = useState(initialMode);
@@ -10,12 +11,15 @@ export default function BootGate({ initialMode = 'register', onAuthed, onDismiss
   const [error, setError] = useState('');
   const [issued, setIssued] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showIssued, setShowIssued] = useState(false);
+  const [showInput, setShowInput] = useState(false);
   const firstField = useRef(null);
 
   useEffect(() => {
     setMode(initialMode);
     setError('');
     setIssued(null);
+    setShowIssued(false);
   }, [initialMode]);
 
   useEffect(() => {
@@ -120,8 +124,19 @@ export default function BootGate({ initialMode = 'register', onAuthed, onDismiss
           {issued ? (
             <div className="issued">
               <span className="hint">Access code issued — keep it. It is your key back in.</span>
-              <div className="code" aria-live="polite">
-                {issued.code}
+              <div className="code" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <span style={{ letterSpacing: '0.08em' }}>{showIssued ? issued.code : maskCode(issued.code)}</span>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  style={{ letterSpacing: 'normal' }}
+                  onClick={() => setShowIssued((v) => !v)}
+                  aria-pressed={showIssued}
+                  aria-label={showIssued ? 'hide access code' : 'show access code'}
+                  title={showIssued ? 'hide access code' : 'show access code'}
+                >
+                  {showIssued ? '🙈' : '👁'}
+                </button>
               </div>
               <div className="boot__foot">
                 <button type="button" className="btn" onClick={copyCode}>
@@ -157,17 +172,31 @@ export default function BootGate({ initialMode = 'register', onAuthed, onDismiss
               ) : (
                 <div className="field">
                   <label htmlFor="boot-code">Access code</label>
-                  <input
-                    id="boot-code"
-                    ref={firstField}
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    placeholder="RC-XXXX-XXXX"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-invalid={Boolean(error)}
-                    aria-describedby={error ? 'boot-error' : undefined}
-                  />
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      id="boot-code"
+                      ref={firstField}
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      placeholder="RC-XXXX-XXXX"
+                      type={showInput ? 'text' : 'password'}
+                      autoComplete="off"
+                      spellCheck={false}
+                      style={{ flex: 1 }}
+                      aria-invalid={Boolean(error)}
+                      aria-describedby={error ? 'boot-error' : undefined}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setShowInput((v) => !v)}
+                      aria-pressed={showInput}
+                      aria-label={showInput ? 'hide access code' : 'show access code'}
+                      title={showInput ? 'hide access code' : 'show access code'}
+                    >
+                      {showInput ? '🙈' : '👁'}
+                    </button>
+                  </div>
                   <span className="hint">Format: RC-XXXX-XXXX</span>
                 </div>
               )}

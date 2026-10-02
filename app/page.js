@@ -15,7 +15,7 @@ import LoomTerminal from '@/components/loomterminal';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
 import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
-import { fmtPrice } from '@/lib/format';
+import { fmtPrice, maskCode } from '@/lib/format';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
@@ -158,6 +158,7 @@ export default function Page() {
   const [authMode, setAuthMode] = useState(null); // null | 'register' | 'login'
   const [showConnector, setShowConnector] = useState(false);
   const [caCopied, setCaCopied] = useState(false);
+  const [codeVisible, setCodeVisible] = useState(false);
   const [connector, setConnector] = useState(null);
   const [contextFile, setContextFile] = useState(null); // null | 'skill' | 'readme'
   const [topics, setTopics] = useState({ active: null, current: [], scheduled: [], archive: [] });
@@ -541,7 +542,7 @@ export default function Page() {
     bootedRef.current = true;
 
     push({ kind: 'head', text: 'ROOTCHAIN TERMINAL v1.0' });
-    push({ kind: 'sys', text: `secure channel established · session ${session.code}` });
+    push({ kind: 'sys', text: `secure channel established · session ${maskCode(session.code)} (👁 header reveals it)` });
     push({ kind: 'sys', text: 'cross-chain module ready · memory active' });
     if (connectorRef.current) {
       push({
@@ -1321,7 +1322,17 @@ export default function Page() {
               <span className="hdr__user">
                 USER <b>{session.username}</b>
               </span>
-              <span className="kbview">{session.code}</span>
+              <span className="kbview">{codeVisible ? session.code : maskCode(session.code)}</span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setCodeVisible((v) => !v)}
+                aria-pressed={codeVisible}
+                aria-label={codeVisible ? 'hide access code' : 'show access code'}
+                title={codeVisible ? 'hide access code' : 'show access code'}
+              >
+                {codeVisible ? '🙈' : '👁'}
+              </button>
               <button type="button" className="btn btn--ghost btn--sm" onClick={signOut}>
                 Sign out
               </button>
