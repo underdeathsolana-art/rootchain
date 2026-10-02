@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { findUserByCode } from '@/lib/store';
 import { callChatApi, callMcp, sanitizeConnector } from '@/lib/connector';
 import { listLoomWeaves, readLoomWeave, saveLoomWeave, deleteLoomWeave } from '@/lib/store';
+import { nextLocalLine } from '@/lib/localdialogue';
 import { LOOM, dedupeCandidates } from '@/lib/loom';
 
 export const dynamic = 'force-dynamic';
@@ -50,21 +51,21 @@ export async function POST(req) {
       }
       const k = Math.min(Math.max(1, Number(body.k) || LOOM.CANDIDATES_DEFAULT), LOOM.CANDIDATES_MAX);
       const connector = sanitizeConnector(body.connector);
-      if (!connector) {
-        return NextResponse.json(
-          { ok: false, error: 'No AI linked — the loom weaves on your own key. Type "connect" in the main terminal first.' },
-          { status: 400 },
-        );
-      }
-
-      const messages = [
-        { role: 'system', content: LOOM_SYSTEM },
-        { role: 'user', content: `Continue this text:\n\n${pathText}` },
-      ];
 
       let attempts;
       let mcpTool = '';
-      if (connector.type === 'mcp') {
+      let local = false;
+      if (!connector) {
+        // Offline mode — no key needed: strands come from the local engine
+        // (surreal by design) and everything still saves to the database.
+        // Connecting any API key upgrades "w" to true continuations.
+        local = true;
+        attempts = [];
+        for (let i = 0; attempts.length < k && i < k * 8; i += 1) {
+          const line = nextLocalLine(i % 2 ? 'link' : 'root', {});
+          if (line) attempts.push(line);
+        }
+      } else if (connector.type === 'mcp') {
         attempts = [];
         for (let i = 0; i < k; i += 1) {
           // eslint-disable-next-line no-await-in-loop
@@ -73,6 +74,10 @@ export async function POST(req) {
           attempts.push(out.text);
         }
       } else {
+        const messages = [
+          { role: 'system', content: LOOM_SYSTEM },
+          { role: 'user', content: `Continue this text:\n\n${pathText}` },
+        ];
         attempts = await Promise.allSettled(
           Array.from({ length: k }, () =>
             callChatApi(connector, messages, { temperature: 1.0, maxTokens: 900 }),
@@ -88,7 +93,8 @@ export async function POST(req) {
       return NextResponse.json({
         ok: true,
         candidates,
-        model: connector.model || mcpTool || connector.type,
+        model: local ? 'local engine' : connector.model || mcpTool || connector.type,
+        local,
         rev: 1,
       });
     }
@@ -97,26 +103,26 @@ export async function POST(req) {
       const name = String(body.name || '').trim().slice(0, 40).replace(/[|/\\]/g, '-');
       const weave = body.weave;
       if (!name || name.length < 2) {
-        return NextResponse.json({ ok: false, error: 'Name the weave — "save <name>" (2-40 chars).' }, { status: 400 });
+        return NextResponse.json({ ok: false, error: 'Name the rtc-loom — "save <name>" (2-40 chars).' }, { status: 400 });
       }
       if (!weave || typeof weave !== 'object' || !weave.nodes || !weave.nodes['1']) {
-        return NextResponse.json({ ok: false, error: 'That weave has no root — "new <seed>" starts one.' }, { status: 400 });
+        return NextResponse.json({ ok: false, error: 'That rtc-loom has no root — "new <seed>" starts one.' }, { status: 400 });
       }
       if (Object.keys(weave.nodes).length > LOOM.NODES_MAX) {
-        return NextResponse.json({ ok: false, error: `Weave too large (${LOOM.NODES_MAX} nodes max).` }, { status: 400 });
+        return NextResponse.json({ ok: false, error: `Loom too large (${LOOM.NODES_MAX} nodes max).` }, { status: 400 });
       }
       if (JSON.stringify(weave).length > LOOM.WEAVE_JSON_MAX) {
-        return NextResponse.json({ ok: false, error: 'Weave too heavy to store — trim some branches.' }, { status: 400 });
+        return NextResponse.json({ ok: false, error: 'Loom too heavy to store — trim some branches.' }, { status: 400 });
       }
       await saveLoomWeave(owner, name, weave, user.username);
-      return NextResponse.json({ ok: true, text: `weave "${name}" saved (${Object.keys(weave.nodes).length} nodes).` });
+      return NextResponse.json({ ok: true, text: `rtc-loom "${name}" saved (${Object.keys(weave.nodes).length} nodes).` });
     }
 
     if (action === 'load') {
       const name = String(body.name || '').trim().slice(0, 40);
       const doc = await readLoomWeave(owner, name);
       if (!doc) {
-        return NextResponse.json({ ok: false, error: `No saved weave "${name}" — "ls" lists yours.` }, { status: 404 });
+        return NextResponse.json({ ok: false, error: `No saved rtc-loom "${name}" — "ls" lists yours.` }, { status: 404 });
       }
       return NextResponse.json({ ok: true, weave: { ...doc.weave, name } });
     }
@@ -129,7 +135,7 @@ export async function POST(req) {
     if (action === 'rm') {
       const name = String(body.name || '').trim().slice(0, 40);
       await deleteLoomWeave(owner, name);
-      return NextResponse.json({ ok: true, text: `weave "${name}" deleted.` });
+      return NextResponse.json({ ok: true, text: `rtc-loom "${name}" deleted.` });
     }
 
     return NextResponse.json({ ok: false, error: 'Unknown action.' }, { status: 400 });

@@ -51,8 +51,9 @@ const HELP_TEXT = [
   '  alert      arm a price alert — alert rtc > 0.00002 fires when crossed',
   '             alert del <n> · alert clear · checked live every 15 seconds',
   '  watch      token watchlist — watch add <ca|link|pool> · watch del <n>',
-  '  loom       open the LOOM — branching text weaver on your own AI',
-  '             (needs "connect" — bring any API key; free endpoints work)',
+  '  loom       open RTC-LOOM — branching text terminal on a live tree graph',
+  '             own AI optional: connected = AI strands · offline = local',
+  '             engine + manual strands · every loom saves to the database',
   '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -97,11 +98,13 @@ const ABOUT_TEXT = [
 '  live feed every 15 seconds and prints a ⚡ line the moment it crosses.',
 '  "watch add <ca>" keeps live prices for any tokens you follow.',
 '',
-'LOOM WEAVE',
-'  "loom" opens the branching text explorer: seed a text, "w" grows k',
-'  candidate continuations from your linked AI, pick one and keep weaving —',
-'  branch, rewind, edit and bookmark nodes of the story-tree. Weaves save',
-'  under your operator. Terminal-native take on Loom / universal-weave.',
+'RTC-LOOM',
+'  "loom" opens the branching text explorer on a live tree graph: seed a',
+'  text, "w" grows candidate strands, a number picks one — branch, rewind,',
+'  edit and bookmark nodes. With an AI linked (any API key) strands come',
+'  from your model; without one the local engine and "a <text>" manual',
+'  strands keep it running, and every loom saves to the database.',
+'  universal-weave-inspired, terminal-native.',
   '',
   'ROOTIDE',
   '  "ide" opens an online prompt IDE on your own AI — prompt files,',
@@ -955,19 +958,21 @@ export default function Page() {
           break;
         }
 
-        case 'loom': {
+        case 'loom':
+        case 'rtc-loom':
+        case 'rtcloom': {
           if (!session) {
-            push({ kind: 'error', text: 'register or log in first — weaves belong to an operator.' });
+            push({ kind: 'error', text: 'register or log in first — rtc-looms belong to an operator.' });
             break;
           }
           if (!connector) {
             push({
               kind: 'warn',
-              text: 'the loom weaves on your own AI — type "connect" and attach any API key first (OpenAI-compatible endpoints and MCP servers both work, free ones included).',
+              text: 'RTC-LOOM runs without an AI — the offline engine provides strands and every loom saves to the database. "connect" (any API key) upgrades w to true AI continuations.',
             });
           }
           setLoomMode(true);
-          push({ kind: 'sys', text: 'opening the loom…', instant: true });
+          push({ kind: 'sys', text: 'opening rtc-loom…', instant: true });
           break;
         }
 
