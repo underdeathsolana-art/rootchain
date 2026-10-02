@@ -3,7 +3,7 @@ import { findUserByCode } from '@/lib/store';
 import { callChatApi, callMcp, sanitizeConnector } from '@/lib/connector';
 import { listLoomWeaves, readLoomWeave, saveLoomWeave, deleteLoomWeave, setDirectorNote, clearDirectorNote, getDirectorNote } from '@/lib/store';
 import { nextLocalLine } from '@/lib/localdialogue';
-import { LOOM, dedupeCandidates } from '@/lib/loom';
+import { LOOM, dedupeCandidates, pickSeeds } from '@/lib/loom';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,6 +136,54 @@ export async function POST(req) {
       const name = String(body.name || '').trim().slice(0, 40);
       await deleteLoomWeave(owner, name);
       return NextResponse.json({ ok: true, text: `rtc-loom "${name}" deleted.` });
+    }
+
+    if (action === 'seeds') {
+      // Seed suggestions for "ideas [topic]" — the operator's own AI when a
+      // key is connected, the static seed bank when not.
+      const topic = String(body.topic || '').trim().slice(0, 200);
+      const connector = sanitizeConnector(body.connector);
+      const SEEDS_SYSTEM = [
+        'You suggest opening lines for a branching text loom.',
+        'Return EXACTLY five seeds, one per line — no numbering, no bullets, no quotes, no commentary.',
+        'Each seed is a single evocative sentence under 25 words that invites continuation.',
+      ].join(' ');
+
+      if (!connector) {
+        return NextResponse.json({ ok: true, seeds: pickSeeds(3), local: true, rev: 1 });
+      }
+      try {
+        const prompt = topic
+          ? `Suggest five seed openings about: ${topic}`
+          : 'Suggest five seed openings — varied: a scene, a mystery, a signal, a place, a dialogue opener.';
+        let raw;
+        if (connector.type === 'mcp') {
+          raw = (await callMcp(connector, { system: SEEDS_SYSTEM, prompt })).text;
+        } else {
+          raw = await callChatApi(
+            connector,
+            [
+              { role: 'system', content: SEEDS_SYSTEM },
+              { role: 'user', content: prompt },
+            ],
+            { temperature: 1.1, maxTokens: 700 },
+          );
+        }
+        const seeds = raw
+          .split('\n')
+          .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+          .filter(Boolean)
+          .slice(0, 5);
+        if (!seeds.length) {
+          return NextResponse.json({ ok: false, error: 'The AI returned no seeds — try again.' }, { status: 502 });
+        }
+        return NextResponse.json({ ok: true, seeds, model: connector.model || connector.tool, rev: 1 });
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, error: `Seed suggestions failed — ${String(err.message || err).slice(0, 180)}` },
+          { status: 502 },
+        );
+      }
     }
 
     if (action === 'stage') {

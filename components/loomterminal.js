@@ -20,6 +20,7 @@ import {
 
 const HELP_LINES = [
   'RTC-LOOM COMMANDS — branching text, own AI optional',
+  '  ideas [topic] ...... ask your AI for seed openings (offline: seed bank)',
   '  new <seed text> .... start an rtc-loom from a seed',
   '  w [k] .............. weave: grow k strands (default 4) — your AI when',
   '                       connected, the local engine when not',
@@ -31,8 +32,32 @@ const HELP_LINES = [
   '  stage .............. direct the agent channel — Root & Chain weave',
   '                       their next turns around your active path',
   '  unstage ............ release the agents back to the topic files',
-  '  save <name> · load <name> · ls · rm <name> — the database keeps every loom',
+  '  guide .............. the full weaving guide · save/load/ls/rm persist looms',
   '  clear · exit',
+];
+
+const GUIDE_LINES = [
+  'RTC-LOOM GUIDE — how to weave a good loom',
+  '',
+  '  1. SEED      "ideas" asks your AI for openings (or "ideas cyberpunk heist"),',
+  '               then start:  new The relay wakes to a signal nobody logged.',
+  '               A good seed is one vivid sentence with somewhere to go.',
+  '  2. WEAVE     "w" grows 4 strands from the active path ("w 6" for more).',
+  '               Strands are 1-3 sentence continuations — advance, twist or',
+  '               deepen. Don\'t like them? "w" again; old strands stay.',
+  '  3. CHOOSE    Pick "1".."6". The chosen strand becomes the tip; the rest',
+  '               remain branches on the graph — nothing is ever lost.',
+  '  4. BRANCH    "back 2" rewinds the path, then pick another strand (or "w").',
+  '               "go <id>" jumps anywhere; click nodes in the graph panel.',
+  '  5. REFINE    "e" rewrites the active node · "b" bookmarks a keeper ·',
+  '               "a <text>" adds your own strand when the AI misses.',
+  '  6. USE IT    "p" prints the full story · "stage" hands the active path to',
+  '               Agent-01 Root & Agent-02 Chain as their direction ·',
+  '               "save <name>" keeps the loom in the database.',
+  '',
+  '  TIPS: weave short and often beats long and rare — paths stay coherent.',
+  '        Bookmark fork points ("b") so you can return after a dead end.',
+  '        The graph is the map: lit path = your story, dashed = unexplored.',
 ];
 
 /**
@@ -226,10 +251,11 @@ export default function LoomTerminal({ session, connector, onExit }) {
     out('ROOTCHAIN RTC-LOOM // BRANCH TERMINAL', 'head');
     if (connector) {
       out(`weaving on your AI — ${connector.model || connector.tool || connector.type} (${connector.type === 'mcp' ? 'MCP' : 'API'})`);
+      out('QUICK GUIDE — 1) "ideas" for seed openings · 2) "new <seed>" starts · 3) "w" grows strands · 4) pick 1-6 · 5) "stage" directs Root & Chain. Full manual: "guide".', 'ok');
     } else {
       out('LOCAL MODE — "w" pulls strands from the offline engine and every loom saves to the database. "connect" (any API key) upgrades w to true AI continuations.', 'warn');
+      out('"ideas" still works offline (seed bank) · "guide" explains the full weave.');
     }
-    out('"new <seed>" starts · "w" grows strands · a number picks one · "a <text>" adds your own');
     refreshSaved();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -324,6 +350,30 @@ export default function LoomTerminal({ session, connector, onExit }) {
     }
     if (command === 'clear') {
       setLines([]);
+      return;
+    }
+    if (command === 'guide' || command === 'manual') {
+      GUIDE_LINES.forEach((l) => out(l));
+      return;
+    }
+    if (command === 'ideas' || command === 'idea' || command === 'seeds') {
+      const topic = tail;
+      out(topic ? `asking for seed openings about "${topic.slice(0, 60)}"…` : 'asking for seed openings…');
+      try {
+        const data = await callLoom({ action: 'seeds', topic, connector });
+        if (!data.ok) {
+          out(data.error, 'error');
+          return;
+        }
+        const source = data.local
+          ? 'the offline seed bank — "connect" an AI for fresh, topical suggestions'
+          : data.model;
+        out(`─ seeds from ${source} ─`);
+        data.seeds.forEach((s, i) => out(`  ${i + 1}. ${s}`, 'ok'));
+        out('start one with: new <seed text> — or tweak it first; good seeds are yours.');
+      } catch {
+        out('rtc-loom unreachable — is the terminal service running?', 'error');
+      }
       return;
     }
     if (command === 'new') {
