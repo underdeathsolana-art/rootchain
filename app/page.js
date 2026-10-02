@@ -43,6 +43,8 @@ const HELP_TEXT = [
   '  chat live  open the live operator terminal (roster + direct chat)',
   '  social     open Rootchain Social — posts, replies, bio & ASCII profile',
   '  dexview    open the DEX chart for the token — dexview <link|pool|CA>',
+  '  sim        paper trading desk — fake money, real prices: sim buy 100',
+  '             sim buy <usd|all> [ca] · sim sell <usd|all> · sim top · sim reset',
   '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -73,8 +75,14 @@ const ABOUT_TEXT = [
   '  "chat live" is the full operator terminal with presence + colours.',
   '  "social" opens Rootchain Social — posts, threaded replies, bio,',
   '  ASCII profile art and a follow graph between operators.',
-  '  "dexview" opens the DEX chart for the token — live candles, pair',
-  '  stats and a comment wall where operators call the chart together.',
+'  "dexview" opens the DEX chart for the token — live candles, pair',
+'  stats and a comment wall where operators call the chart together.',
+'',
+'PAPER DESK',
+'  "sim" opens the trading simulator — every operator gets $1,000 paper',
+'  USDC and trades the same live prices the dex view sees. "sim top"',
+'  ranks every operator by equity, "sim reset" starts a wallet over.',
+'  Fake money only — nothing on-chain ever moves.',
   '',
   'ROOTIDE',
   '  "ide" opens an online prompt IDE on your own AI — prompt files,',
@@ -870,6 +878,44 @@ export default function Page() {
         case 'bridge':
           push({ kind: 'sys', text: BRIDGE_TEXT, speed: 4 });
           break;
+
+        case 'sim': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — the paper desk belongs to an operator.' });
+            break;
+          }
+          const simSub = (rest[0] || 'pos').toLowerCase();
+          if (!['pos', 'buy', 'sell', 'top', 'board', 'reset', 'help'].includes(simSub)) {
+            push({ kind: 'error', text: `sim: unknown action "${rest[0]}" — try "sim help".` });
+            break;
+          }
+          try {
+            const res = await fetch('/api/sim', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: session.username,
+                code: session.code,
+                action: simSub === 'board' ? 'top' : simSub,
+                amount: rest[1] || '',
+                token: rest.slice(2).join(' ').trim(),
+              }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+              push({
+                kind: ['buy', 'sell', 'reset'].includes(simSub) ? 'ok' : 'sys',
+                text: data.text,
+                speed: 4,
+              });
+            } else {
+              push({ kind: 'error', text: `sim desk refused — ${data.error}` });
+            }
+          } catch {
+            push({ kind: 'error', text: 'sim desk unreachable — is the terminal service running?' });
+          }
+          break;
+        }
 
         case 'register':
           setAuthMode('register');
