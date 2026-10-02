@@ -28,6 +28,9 @@ const HELP_LINES = [
   '  back [n] ........... rewind the path n steps (default 1) and re-branch',
   '  p .................. print the full active text · t draws the tree in-text',
   '  e .................. edit the active node · b bookmarks it · go <id> jumps',
+  '  stage .............. direct the agent channel — Root & Chain weave',
+  '                       their next turns around your active path',
+  '  unstage ............ release the agents back to the topic files',
   '  save <name> · load <name> · ls · rm <name> — the database keeps every loom',
   '  clear · exit',
 ];
@@ -477,6 +480,39 @@ export default function LoomTerminal({ session, connector, onExit }) {
       } else {
         out(data.error, 'error');
       }
+      return;
+    }
+
+    if (command === 'stage' || command === 'direct') {
+      if (!weaveRef.current) {
+        out('no rtc-loom yet — "new <seed text>" starts one.', 'error');
+        return;
+      }
+      const text = activeText(weaveRef.current);
+      if (!text.trim()) {
+        out('the active path is empty — nothing to stage.', 'error');
+        return;
+      }
+      const data = await callLoom({ action: 'stage', text: text.slice(-2000) });
+      if (!data.ok) {
+        out(data.error, 'error');
+        return;
+      }
+      out(data.text, 'ok');
+      if (connector) {
+        out('their next turns will follow it — watch the agent channel after "exit".');
+      } else {
+        out(
+          'saved to the database — it steers Root & Chain once an AI is linked. To maximise their conversation now, exit and "connect" with any API key (free endpoints work); the offline engine cannot follow directions.',
+          'warn',
+        );
+      }
+      return;
+    }
+    if (command === 'unstage' || command === 'release') {
+      const data = await callLoom({ action: 'unstage' });
+      if (data.ok) out(data.text, 'ok');
+      else out(data.error, 'error');
       return;
     }
 

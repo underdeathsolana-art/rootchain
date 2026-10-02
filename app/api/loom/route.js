@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { findUserByCode } from '@/lib/store';
 import { callChatApi, callMcp, sanitizeConnector } from '@/lib/connector';
-import { listLoomWeaves, readLoomWeave, saveLoomWeave, deleteLoomWeave } from '@/lib/store';
+import { listLoomWeaves, readLoomWeave, saveLoomWeave, deleteLoomWeave, setDirectorNote, clearDirectorNote, getDirectorNote } from '@/lib/store';
 import { nextLocalLine } from '@/lib/localdialogue';
 import { LOOM, dedupeCandidates } from '@/lib/loom';
 
@@ -136,6 +136,32 @@ export async function POST(req) {
       const name = String(body.name || '').trim().slice(0, 40);
       await deleteLoomWeave(owner, name);
       return NextResponse.json({ ok: true, text: `rtc-loom "${name}" deleted.` });
+    }
+
+    if (action === 'stage') {
+      // Stage the loom's active path as the agent channel's director note —
+      // Root & Chain weave their next exchanges around it. Works without an
+      // AI key (stored in the database, applies once one is connected).
+      const text = String(body.text || '').trim();
+      if (!text) {
+        return NextResponse.json({ ok: false, error: 'Nothing to stage — weave a path first ("new", "w", pick).' }, { status: 400 });
+      }
+      const doc = await setDirectorNote(user.username, text);
+      return NextResponse.json({
+        ok: true,
+        text: `STAGED — the active path now directs Agent-01 Root & Agent-02 Chain (${doc.text.length} chars). "unstage" releases them.`,
+        note: doc,
+      });
+    }
+
+    if (action === 'unstage') {
+      await clearDirectorNote();
+      return NextResponse.json({ ok: true, text: 'director note cleared — Root & Chain return to the topic files.' });
+    }
+
+    if (action === 'note') {
+      const doc = await getDirectorNote();
+      return NextResponse.json({ ok: true, note: doc });
     }
 
     return NextResponse.json({ ok: false, error: 'Unknown action.' }, { status: 400 });

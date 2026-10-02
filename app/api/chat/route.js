@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { callChatApi, callMcp, sanitizeConnector } from '@/lib/connector';
 import { buildSystemPrompt, AGENTS } from '@/lib/agents';
 import { readTopics, topicDigest } from '@/lib/topics';
-import { findUserByCode, readAgentContext } from '@/lib/store';
+import { findUserByCode, readAgentContext, getDirectorNote } from '@/lib/store';
 import { nextLocalLine } from '@/lib/localdialogue';
 import { TOKEN_CA, asksForCa, caReplyLine } from '@/lib/ca';
 
@@ -68,6 +68,7 @@ export async function POST(req) {
     topicTitle: active?.title,
     memory,
     context,
+    director: await getDirectorNote(),
   });
 
   const connector = sanitizeConnector(body.connector);

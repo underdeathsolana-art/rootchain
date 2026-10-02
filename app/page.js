@@ -54,6 +54,8 @@ const HELP_TEXT = [
   '  loom       open RTC-LOOM — branching text terminal on a live tree graph',
   '             own AI optional: connected = AI strands · offline = local',
   '             engine + manual strands · every loom saves to the database',
+  '  stage      show the director note — rtc-loom "stage" points Root &',
+  '             Chain at your woven path · unstage releases them',
   '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -104,7 +106,10 @@ const ABOUT_TEXT = [
 '  edit and bookmark nodes. With an AI linked (any API key) strands come',
 '  from your model; without one the local engine and "a <text>" manual',
 '  strands keep it running, and every loom saves to the database.',
-'  universal-weave-inspired, terminal-native.',
+'  "stage" inside the loom directs the agent channel: Root & Chain weave',
+'  their next exchanges around your active path (stored even without a',
+'  key; connect one to maximise their conversation). universal-weave-',
+'  inspired, terminal-native.',
   '',
   'ROOTIDE',
   '  "ide" opens an online prompt IDE on your own AI — prompt files,',
@@ -666,6 +671,22 @@ export default function Page() {
 
         case 'status': {
           const t = topicsRef.current;
+          let directorLine = null;
+          if (session) {
+            try {
+              const res = await fetch('/api/loom', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: session.username, code: session.code, action: 'note' }),
+              });
+              const data = await res.json();
+              if (data.ok && data.note) {
+                directorLine = `staged by ${data.note.username} via rtc-loom — "${String(data.note.text).replace(/\s+/g, ' ').slice(0, 50)}…" ("unstage" clears)`;
+              }
+            } catch {
+              /* status stays silent on a desk hiccup */
+            }
+          }
           const linkLabel = status.link === 'live'
             ? status.source === 'mcp' ? 'MCP LIVE' : 'API LIVE'
             : 'LOCAL ENGINE';
@@ -681,6 +702,7 @@ export default function Page() {
               `  CROSS-CHAIN ....... READY`,
               `  MEMORY ............ ${status.memory ? 'ACTIVE' : 'STANDBY'} · ${memory.count} turn(s)`,
               `  RELAY ............. ${relay.online.length} online · ${relay.operators.length} registered · ${relay.store === 'mongodb' ? 'MONGODB' : relay.store ? 'FILE' : '—'}`,
+              `  DIRECTOR .......... ${directorLine || 'no staged note — rtc-loom "stage" directs Root & Chain'}`,
               `  SESSION ........... ${session?.username} · ${session?.code}`,
               `  ACTIVE TOPIC ...... ${t.active ? t.active.title : 'none loaded'}`,
               `  AUTO LOOP ......... ${auto ? 'on' : 'off'}`,
@@ -973,6 +995,63 @@ export default function Page() {
           }
           setLoomMode(true);
           push({ kind: 'sys', text: 'opening rtc-loom…', instant: true });
+          break;
+        }
+
+        case 'stage': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — the director note belongs to an operator.' });
+            break;
+          }
+          try {
+            const res = await fetch('/api/loom', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: session.username, code: session.code, action: 'note' }),
+            });
+            const data = await res.json();
+            if (!data.ok || !data.note) {
+              push({
+                kind: 'sys',
+                text: 'no director note staged — open the rtc-loom ("loom"), weave a path, then "stage" it to direct Root & Chain.',
+                speed: 5,
+              });
+              break;
+            }
+            push({
+              kind: 'sys',
+              text: [
+                `DIRECTOR NOTE — set by ${data.note.username} via rtc-loom`,
+                `  staged ${new Date(data.note.setAt).toLocaleString()} · shapes every live agent turn`,
+                '',
+                String(data.note.text).slice(0, 600),
+                '',
+                'clear it with "unstage".',
+              ].join('\n'),
+              speed: 4,
+            });
+          } catch {
+            push({ kind: 'error', text: 'director desk unreachable — is the terminal service running?' });
+          }
+          break;
+        }
+
+        case 'unstage': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first.' });
+            break;
+          }
+          try {
+            const res = await fetch('/api/loom', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: session.username, code: session.code, action: 'unstage' }),
+            });
+            const data = await res.json();
+            push({ kind: data.ok ? 'ok' : 'error', text: data.ok ? data.text : `refused — ${data.error}` });
+          } catch {
+            push({ kind: 'error', text: 'director desk unreachable — is the terminal service running?' });
+          }
           break;
         }
 
