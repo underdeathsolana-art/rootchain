@@ -14,12 +14,14 @@ import MarketTerminal from '@/components/marketterminal';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
 import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
+import { fmtPrice } from '@/lib/format';
 
 const SESSION_KEY = 'rootchain.session.v1';
 const LOG_KEY = 'rootchain.log.v1';
 const CONNECTOR_KEY = 'rootchain.connector.v1';
 const AUTO_INTERVAL = 20000;
 const RELAY_INTERVAL = 3000;
+const ALERT_INTERVAL = 15000;
 
 const AGENT_META = {
   root: { tag: 'Agent-01', name: 'Root' },
@@ -45,6 +47,9 @@ const HELP_TEXT = [
   '  dexview    open the DEX chart for the token — dexview <link|pool|CA>',
   '  sim        paper trading desk — fake money, real prices: sim buy 100',
   '             sim buy <usd|all> [ca] · sim sell <usd|all> · sim top · sim reset',
+  '  alert      arm a price alert — alert rtc > 0.00002 fires when crossed',
+  '             alert del <n> · alert clear · checked live every 15 seconds',
+  '  watch      token watchlist — watch add <ca|link|pool> · watch del <n>',
   '  ide        open ROOTIDE — write & run prompts online on your own AI',
   '  topic      show the active topic from content/topics/current',
   '  bridge     cross-chain route: Solana → BSC → Robinhood',
@@ -83,6 +88,11 @@ const ABOUT_TEXT = [
 '  USDC and trades the same live prices the dex view sees. "sim top"',
 '  ranks every operator by equity, "sim reset" starts a wallet over.',
 '  Fake money only — nothing on-chain ever moves.',
+'',
+'ALERTS & WATCHLIST',
+'  "alert rtc > 0.00002" arms a one-shot alert — the terminal checks the',
+'  live feed every 15 seconds and prints a ⚡ line the moment it crosses.',
+'  "watch add <ca>" keeps live prices for any tokens you follow.',
   '',
   'ROOTIDE',
   '  "ide" opens an online prompt IDE on your own AI — prompt files,',
@@ -155,6 +165,7 @@ export default function Page() {
   const relayCursorRef = useRef('');
   const relayBusyRef = useRef(false);
   const relaySyncedRef = useRef(false);
+  const alertBusyRef = useRef(false);
   const reduceRef = useRef(false);
   const inputRef = useRef(null);
 
@@ -394,6 +405,40 @@ export default function Page() {
     return () => clearInterval(id);
   }, [session, pollRelay]);
 
+  // ── price alerts (evaluated server-side on this 15s poll) ────────────────
+  const pollAlerts = useCallback(async () => {
+    if (!session || alertBusyRef.current) return;
+    alertBusyRef.current = true;
+    try {
+      const params = new URLSearchParams({ username: session.username, code: session.code });
+      const res = await fetch(`/api/alerts?${params.toString()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.ok) return;
+      for (const f of data.fired || []) {
+        push({
+          kind: f.op === '>' ? 'ok' : 'warn',
+          instant: true,
+          text: `⚡ PRICE ALERT — ${f.symbol} crossed ${f.op === '>' ? 'ABOVE' : 'BELOW'} ${fmtPrice(f.target)} · now ${fmtPrice(f.price)}`,
+        });
+      }
+    } catch {
+      /* keep previous */
+    } finally {
+      alertBusyRef.current = false;
+    }
+  }, [session, push]);
+
+  useEffect(() => {
+    if (!session) return;
+    pollAlerts();
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pollAlerts();
+      }
+    }, ALERT_INTERVAL);
+    return () => clearInterval(id);
+  }, [session, pollAlerts]);
+
   // ── agent turn ──────────────────────────────────────────────────────────
   const runAgentTurn = useCallback(
     async (forced) => {
@@ -549,6 +594,31 @@ export default function Page() {
       /* clipboard unavailable — the address stays on screen */
     }
   }, []);
+
+  // Shared POST helper for the command desks (sim / alerts / watchlist) —
+  // each returns a ready-to-print block, so the command cases stay thin.
+  const postCommandDesk = useCallback(
+    async (path, payload, okKind = 'sys', label = 'desk') => {
+      try {
+        const res = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: session?.username, code: session?.code, ...payload }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          push({ kind: okKind, text: data.text, speed: 4 });
+          return true;
+        }
+        push({ kind: 'error', text: `${label} refused — ${data.error}` });
+        return false;
+      } catch {
+        push({ kind: 'error', text: `${label} unreachable — is the terminal service running?` });
+        return false;
+      }
+    },
+    [push, session?.code, session?.username],
+  );
 
   const runCommand = useCallback(
     async (raw) => {
@@ -889,31 +959,85 @@ export default function Page() {
             push({ kind: 'error', text: `sim: unknown action "${rest[0]}" — try "sim help".` });
             break;
           }
-          try {
-            const res = await fetch('/api/sim', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                username: session.username,
-                code: session.code,
-                action: simSub === 'board' ? 'top' : simSub,
-                amount: rest[1] || '',
-                token: rest.slice(2).join(' ').trim(),
-              }),
-            });
-            const data = await res.json();
-            if (data.ok) {
-              push({
-                kind: ['buy', 'sell', 'reset'].includes(simSub) ? 'ok' : 'sys',
-                text: data.text,
-                speed: 4,
-              });
-            } else {
-              push({ kind: 'error', text: `sim desk refused — ${data.error}` });
-            }
-          } catch {
-            push({ kind: 'error', text: 'sim desk unreachable — is the terminal service running?' });
+          await postCommandDesk(
+            '/api/sim',
+            {
+              action: simSub === 'board' ? 'top' : simSub,
+              amount: rest[1] || '',
+              token: rest.slice(2).join(' ').trim(),
+            },
+            ['buy', 'sell', 'reset'].includes(simSub) ? 'ok' : 'sys',
+            'sim desk',
+          );
+          break;
+        }
+
+        case 'alert': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — alerts belong to an operator.' });
+            break;
           }
+          const a0 = (rest[0] || '').toLowerCase();
+          let payload;
+          if (!a0) {
+            payload = { action: 'alerts' };
+          } else if (a0 === 'del') {
+            if (!rest[1]) {
+              push({ kind: 'error', text: 'usage: alert del <n> — "alert" lists them with numbers.' });
+              break;
+            }
+            payload = { action: 'alert-del', id: rest[1] };
+          } else if (a0 === 'clear') {
+            payload = { action: 'alert-clear' };
+          } else {
+            // "alert rtc > 0.00002" and "alert rtc >0.00002" both parse
+            let op = rest[1] || '';
+            let target = rest[2] || '';
+            if (!target && /^(>=|<=|>|<)/.test(op)) {
+              const m = op.match(/^(>=|<=|>|<)(.*)$/);
+              op = m[1];
+              target = m[2];
+            }
+            if (!['>', '<', '>=', '<='].includes(op) || !target) {
+              push({ kind: 'error', text: 'usage: alert <rtc|ca> >|< <price> — e.g. "alert rtc > 0.00002".' });
+              break;
+            }
+            payload = { action: 'alert-add', token: rest[0], op, target };
+          }
+          const kind = payload.action === 'alert-add' ? 'ok' : 'sys';
+          await postCommandDesk('/api/alerts', payload, kind, 'alert desk');
+          break;
+        }
+
+        case 'watch': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — the watchlist belongs to an operator.' });
+            break;
+          }
+          const w0 = (rest[0] || '').toLowerCase();
+          let payload;
+          if (!w0) {
+            payload = { action: 'watch' };
+          } else if (w0 === 'add') {
+            const token = rest.slice(1).join(' ').trim();
+            if (!token) {
+              push({ kind: 'error', text: 'usage: watch add <ca|link|pool> — adds a token to the watchlist.' });
+              break;
+            }
+            payload = { action: 'watch-add', token };
+          } else if (w0 === 'del') {
+            if (!rest[1]) {
+              push({ kind: 'error', text: 'usage: watch del <n> — "watch" lists rows with numbers.' });
+              break;
+            }
+            payload = { action: 'watch-del', id: rest[1] };
+          } else if (w0 === 'clear') {
+            payload = { action: 'watch-clear' };
+          } else {
+            push({ kind: 'error', text: `watch: unknown action "${rest[0]}" — add / del / clear.` });
+            break;
+          }
+          await postCommandDesk('/api/alerts', payload, payload.action === 'watch-add' ? 'ok' : 'sys', 'watchlist');
           break;
         }
 
@@ -963,7 +1087,7 @@ export default function Page() {
           push({ kind: 'error', text: `rootchain: command not found: ${word}. Type "help".` });
       }
     },
-    [auto, copyCa, memory.count, memory.lastTopic, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, status],
+    [auto, copyCa, memory.count, memory.lastTopic, postCommandDesk, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, status],
   );
 
   function onSubmit(event) {
