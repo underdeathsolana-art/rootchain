@@ -82,8 +82,7 @@ export default function ScannerTerminal({ session, connector, onExit }) {
     if (ev.official) {
       out(`★ OFFICIAL ${ev.official.project} PROJECT TOKEN — ${ev.official.note}`, 'ok');
       if (ev.official.github) out(`  source code: ${ev.official.github}`, 'ok');
-    }
-    if (t) {
+    }    if (t) {
       out([
         'MARKET (dexscreener)',
         `  ${t.name} ($${t.symbol}) · ${t.dex} pool`,
