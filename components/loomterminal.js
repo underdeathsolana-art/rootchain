@@ -73,21 +73,22 @@ const GUIDE_LINES = [
  * to the database under the operator. The side panel renders the tree as a
  * live SVG graph — click any node to jump to it.
  */
-const GRAPH = { W: 150, H: 34, GAP_X: 26, GAP_Y: 12 };
+const GRAPH = { W: 150, H: 34, GAP_X: 26, GAP_Y: 12, font: 10, badgeR: 8.5, snippet: 21 };
+const GRAPH_BIG = { W: 230, H: 54, GAP_X: 46, GAP_Y: 22, font: 13, badgeR: 11, snippet: 33 };
 
 /**
  * The loom's live map: an SVG tree graph. Nodes sit by depth (columns) and
  * leaf order (rows), the active path lights up, pickable strands get a
  * dashed border plus their pick-number badge, and every node is clickable —
- * a click is "go <id>".
+ * a click is "go <id>". `dims` scales the whole thing (panel vs fullscreen).
  */
-function TreeGraph({ weave, onGo }) {
+function TreeGraph({ weave, onGo, dims = GRAPH, full = false }) {
   const { nodes } = weave;
   const activeKids = childrenOf(weave, weave.activeId).map((n) => n.id);
   const pathIds = new Set(activePath(weave).map((n) => n.id));
 
-  const COL = GRAPH.W + GRAPH.GAP_X;
-  const ROW = GRAPH.H + GRAPH.GAP_Y;
+  const COL = dims.W + dims.GAP_X;
+  const ROW = dims.H + dims.GAP_Y;
 
   const depthMemo = new Map();
   const depthOf = (id) => {
@@ -132,11 +133,11 @@ function TreeGraph({ weave, onGo }) {
     const p = pos.get(n.parent);
     const c = pos.get(n.id);
     if (!p || !c) continue;
-    const x1 = p.x + GRAPH.W;
-    const y1 = p.y + GRAPH.H / 2;
+    const x1 = p.x + dims.W;
+    const y1 = p.y + dims.H / 2;
     const x2 = c.x;
-    const y2 = c.y + GRAPH.H / 2;
-    const bend = GRAPH.GAP_X + 14;
+    const y2 = c.y + dims.H / 2;
+    const bend = dims.GAP_X + 14;
     edges.push({
       key: `e${n.id}`,
       d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`,
@@ -148,7 +149,7 @@ function TreeGraph({ weave, onGo }) {
   const svgH = Math.max(leafY, ROW) + 12;
 
   return (
-    <div style={{ overflow: 'auto', maxHeight: '52vh', minHeight: 60 }}>
+    <div style={full ? { overflow: 'auto', width: '100%', height: '100%' } : { overflow: 'auto', maxHeight: '52vh', minHeight: 60 }}>
       <svg width={svgW} height={svgH} role="img" aria-label="rtc-loom branch graph" style={{ display: 'block' }}>
         <g transform="translate(8,6)">
           {edges.map((e) => (
@@ -182,8 +183,8 @@ function TreeGraph({ weave, onGo }) {
               >
                 <title>{`${n.id}: ${String(n.text).slice(0, 220)}`}</title>
                 <rect
-                  width={GRAPH.W}
-                  height={GRAPH.H}
+                  width={dims.W}
+                  height={dims.H}
                   rx={6}
                   fill={fill}
                   stroke="currentColor"
@@ -191,13 +192,13 @@ function TreeGraph({ weave, onGo }) {
                   strokeDasharray={isCand ? '5 3' : undefined}
                   opacity={isActive || onPath || isCand ? 1 : 0.62}
                 />
-                <text x={9} y={GRAPH.H / 2 + 4} fontSize={10} fill="currentColor" style={{ pointerEvents: 'none' }}>
-                  {`${String(n.text).replace(/\s+/g, ' ').slice(0, 21)}${n.text.replace(/\s+/g, ' ').length > 21 ? '…' : ''}${n.bookmark ? ' §' : ''}`}
+                <text x={10} y={dims.H / 2 + dims.font * 0.35} fontSize={dims.font} fill="currentColor" style={{ pointerEvents: 'none' }}>
+                  {`${String(n.text).replace(/\s+/g, ' ').slice(0, dims.snippet)}${n.text.replace(/\s+/g, ' ').length > dims.snippet ? '…' : ''}${n.bookmark ? ' §' : ''}`}
                 </text>
                 {isCand ? (
                   <g style={{ pointerEvents: 'none' }}>
-                    <circle cx={GRAPH.W - 13} cy={13} r={8.5} fill="rgba(0,0,0,.7)" stroke="currentColor" />
-                    <text x={GRAPH.W - 13} y={16.5} fontSize={9.5} textAnchor="middle" fill="currentColor">
+                    <circle cx={dims.W - dims.badgeR - 5} cy={dims.badgeR + 5} r={dims.badgeR} fill="rgba(0,0,0,.7)" stroke="currentColor" />
+                    <text x={dims.W - dims.badgeR - 5} y={dims.badgeR + 5 + dims.font * 0.35} fontSize={dims.font - 0.5} textAnchor="middle" fill="currentColor">
                       {candIdx + 1}
                     </text>
                   </g>
@@ -218,6 +219,7 @@ export default function LoomTerminal({ session, connector, onExit }) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState([]);
   const [editor, setEditor] = useState(null); // { text } while editing the active node
+  const [graphFull, setGraphFull] = useState(false); // fullscreen branch-graph view
 
   const idRef = useRef(0);
   const bootedRef = useRef(false);
@@ -266,6 +268,16 @@ export default function LoomTerminal({ session, connector, onExit }) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines, busy]);
+
+  // ESC collapses the fullscreen graph back into the terminal.
+  useEffect(() => {
+    if (!graphFull) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setGraphFull(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [graphFull]);
 
   /** Mutate a clone, then swap it in — lib/loom ops mutate in place. */
   function mutateWeave(fn) {
@@ -356,6 +368,20 @@ export default function LoomTerminal({ session, connector, onExit }) {
     } catch {
       out('wire unreachable — is the terminal service running?', 'error');
     }
+  }
+
+  /** Compose an X post from the loom — opens the composer with the sources footnote. */
+  function shareLoomToX() {
+    const w = weaveRef.current;
+    if (!w) {
+      out('no rtc-loom yet — "new <seed text>" starts one.', 'error');
+      return;
+    }
+    const path = activePath(w);
+    const seed = String(path[0]?.text || '').replace(/\s+/g, ' ').slice(0, 70);
+    const tip = path.length > 1 ? ` … ${String(path[path.length - 1].text).replace(/\s+/g, ' ').slice(0, 90)}` : '';
+    const text = `rtc-loom weave — ${countNodes(w)} nodes, depth ${activeDepth(w)}\n"${seed}${tip}"\n\nsources : rtcterminal.com`;
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }
 
   async function onSubmit(event) {
@@ -699,7 +725,21 @@ export default function LoomTerminal({ session, connector, onExit }) {
           <section className="panel" data-panel="loom">
             <div className="panel__head">
               <span>Branch graph</span>
-              <span>{weave ? `${countNodes(weave)}n` : '—'}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {weave ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    style={{ padding: '1px 7px' }}
+                    onClick={() => setGraphFull(true)}
+                    title="open the branch graph fullscreen"
+                    aria-label="open branch graph fullscreen"
+                  >
+                    ⤢
+                  </button>
+                ) : null}
+                <span>{weave ? `${countNodes(weave)}n` : '—'}</span>
+              </span>
             </div>
             <div className="panel__body">
               {weave ? (
@@ -780,6 +820,66 @@ export default function LoomTerminal({ session, connector, onExit }) {
           Enter ⏎ run · ESC clear
         </span>
       </form>
+
+      {graphFull && weave ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Branch graph fullscreen"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(3,7,4,.97)',
+            zIndex: 55,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              padding: '10px 14px',
+              borderBottom: '1px solid rgba(134,239,172,.25)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              <b>RTC-LOOM · BRANCH GRAPH</b>
+              {` — ${weave.name ? `"${weave.name}"` : 'unsaved'} · ${countNodes(weave)} nodes · depth ${activeDepth(weave)} · click any node to walk it`}
+            </span>
+            <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn--sm" onClick={shareLoomToX} title="compose an X post from this loom — sources: rtcterminal.com">
+                Share to 𝕏
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => shareLoom(weave.name || '')} title="publish this loom to the wire">
+                Share loom
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setGraphFull(false)}
+                title="collapse back to the terminal (ESC)"
+              >
+                ⤡ Collapse
+              </button>
+            </span>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, padding: '14px' }}>
+            <TreeGraph
+              weave={weave}
+              dims={GRAPH_BIG}
+              full
+              onGo={(id) => {
+                mutateWeave((w) => setActive(w, id));
+                out(`jumped to node ${id} — depth ${activeDepth(weaveRef.current)}.`);
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {editor ? (
         <div
