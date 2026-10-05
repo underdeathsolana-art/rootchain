@@ -7,6 +7,8 @@ const HELP_LINES = [
   'SCANNER COMMANDS',
   '  <CA> · scan <CA> ... scan a Solana contract address',
   '  rtc ................ scan the terminal\'s pinned RTC token',
+  '  deep ............... DEEP AI scan: news + X + dev-trust research,',
+  '                       graded 0-20 points in five categories (needs AI)',
   '  share .............. compose an X post from the last verdict',
   '  help · clear · exit',
 ];
@@ -149,6 +151,45 @@ export default function ScannerTerminal({ session, connector, onExit }) {
     }
   }
 
+  async function runDeep() {
+    const ev = evidenceRef.current;
+    if (!ev) {
+      out('scan a CA first — "deep" researches the current target.', 'error');
+      return;
+    }
+    if (!connector) {
+      out('deep scan runs on your own AI — "exit" and "connect" (any API key) first. Web-capable models research X, news and the dev wallet.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      out('deep scan — gathering fresh news + web signals…');
+      const judged = await callScan({ action: 'deep', evidence: ev, connector });
+      if (!judged.ok) {
+        out(judged.error, 'error');
+        return;
+      }
+      out(`WEB SIGNALS — news ${judged.webSignals.news} · reddit ${judged.webSignals.reddit} · hacker news ${judged.webSignals.hackerNews}`);
+      if (judged.web?.news?.length) judged.web.news.slice(0, 3).forEach((n) => out(`  · ${n.title} (${n.date})`));
+      out(`AI DEEP VERDICT — ${judged.verdict.verdict} ${judged.verdict.score}/100 (${judged.verdict.model})`, VERDICT_KIND[judged.verdict.verdict] || 'sys');
+      out('  POINTS — ' + Object.entries(judged.verdict.categories)
+        .map(([k, v]) => `${k} ${v.points}/20`)
+        .join(' · '));
+      for (const [cat, v] of Object.entries(judged.verdict.categories)) {
+        out(`  ${cat.padEnd(11)} ${String(v.points).padStart(2)}/20 — ${v.note}`);
+      }
+      judged.verdict.evidence?.forEach((r) => out(`  · ${r}`));
+      if (judged.verdict.summary) out(`  ${judged.verdict.summary}`);
+      setVerdict({ ...judged.verdict, heuristic: false });
+      verdictRef.current = { ...judged.verdict, heuristic: false };
+      out('"share" posts the graded verdict to X');
+    } catch {
+      out('deep scan unreachable — is the terminal service running?', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function shareToX() {
     const v = verdictRef.current;
     const ev = evidenceRef.current;
@@ -161,8 +202,11 @@ export default function ScannerTerminal({ session, connector, onExit }) {
     const facts = t
       ? `liq ${fmtK(t.liquidity)} · top10 ${ev.chain?.top10Pct ?? '—'}% · freeze ${ev.chain?.freezeAuthority ? 'SET' : 'none'}`
       : 'no pool found';
-    const judge = v.heuristic ? 'heuristic' : 'AI';
-    const text = `$${sym} contract scan — ${v.verdict} ${v.score}/100 (${judge})\n${facts}\n${v.summary || ''}\n\nsources : rtcterminal.com`;
+    const judge = v.heuristic ? 'heuristic' : v.deep ? 'deep AI' : 'AI';
+    const graded = v.categories
+      ? `\n${Object.entries(v.categories).map(([k, c]) => `${k.toLowerCase()} ${c.points}/20`).join(' · ')}`
+      : '';
+    const text = `$${sym} contract scan — ${v.verdict} ${v.score}/100 (${judge})\n${facts}${graded}\n${v.summary || ''}\n\nsources : rtcterminal.com`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }
 
@@ -180,6 +224,7 @@ export default function ScannerTerminal({ session, connector, onExit }) {
     if (command === 'help' || command === '?') { HELP_LINES.forEach((l) => out(l)); return; }
     if (command === 'clear') { setLines([]); return; }
     if (command === 'share' || command === 'x') { shareToX(); return; }
+    if (command === 'deep' || command === 'research') { await runDeep(); return; }
     if (command === 'rtc') { await runScan(TOKEN_CA); return; }
     if (command === 'scan') {
       if (!rest[0]) { out('usage: scan <CA>', 'error'); return; }
@@ -215,6 +260,11 @@ export default function ScannerTerminal({ session, connector, onExit }) {
           <div className="feedwrap__bar">
             <span>{busy ? 'scanning…' : v ? `${evidence?.token?.symbol || 'scan'} — ${v.verdict} ${v.score}/100${v.heuristic ? ' (heuristic)' : ' (AI)'}` : 'scanner idle'}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              {v && connector ? (
+                <button type="button" className="btn btn--sm" onClick={runDeep} disabled={busy} title="deep AI research: news, X activity, dev trust — graded 0-20 per category">
+                  Deep AI scan
+                </button>
+              ) : null}
               {v ? (
                 <button type="button" className="btn btn--sm" onClick={shareToX} title="compose an X post from the verdict — sources: rtcterminal.com">
                   Share to 𝕏
