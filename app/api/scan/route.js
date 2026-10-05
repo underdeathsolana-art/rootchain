@@ -9,7 +9,9 @@ const JUDGE_SYSTEM = [
   'You are the contract scanner of Rootchain Terminal. You receive JSON evidence about a Solana token:',
   'market data (dexscreener), on-chain state (supply, top holders, mint/freeze authorities), GitHub search',
   'results and socials. Judge how risky this contract is for a buyer. Be sceptical but fair — missing data',
-  'is not proof of a scam. Output STRICTLY this format, nothing else:',
+  'is not proof of a scam. If the evidence carries an "official" registration, cite it in your EVIDENCE lines.',
+  'CRITICAL FORMAT RULE: the very first characters of your reply must be "VERDICT:" — no preamble, no',
+  'thinking out loud, no markdown, no bold. Output STRICTLY this format and nothing else:',
   'VERDICT: SAFE | CAUTION | DANGER',
   'SCORE: <integer 0-100>',
   'EVIDENCE:',
@@ -17,8 +19,13 @@ const JUDGE_SYSTEM = [
   'SUMMARY: <one line, max 20 words>',
 ].join(' ');
 
+/** Strip the decorations real models add (preamble stays, markdown goes) so the verdict markers parse. */
+function normalizeReply(text) {
+  return String(text || '').replace(/[*_`~>#\u2022]/g, '');
+}
+
 function parseJudge(text) {
-  const t = String(text || '');
+  const t = normalizeReply(text);
   const verdict = (t.match(/VERDICT:\s*(SAFE|CAUTION|DANGER)/i) || [])[1]?.toUpperCase() || null;
   const score = Number((t.match(/SCORE:\s*(\d{1,3})/i) || [])[1]);
   const evidenceBlock = (t.split(/EVIDENCE:/i)[1] || '').split(/SUMMARY:/i)[0] || '';
@@ -40,8 +47,10 @@ const DEEP_SYSTEM = [
   'if you have web or search tools, USE THEM: look up the handle, mentions, engagement, pump patterns),',
   'NEWS (coverage found or none), DEV_TRUST (is the dev wallet a known serial deployer/rugger? search the CA and',
   'dev wallet on rugcheck-style analysers if you can browse; otherwise judge from the evidence).',
-  'Missing data is not proof of a scam — say "not found" instead of inventing.',
-  'Output STRICTLY this format, nothing else:',
+  'Missing data is not proof of a scam — say "not found" instead of inventing. If the evidence carries an',
+  '"official" registration, cite it in your EVIDENCE lines and weigh it in DEV_TRUST.',
+  'CRITICAL FORMAT RULE: the very first characters of your reply must be "VERDICT:" — no preamble, no',
+  'thinking out loud, no markdown, no bold. Output STRICTLY this format and nothing else:',
   'VERDICT: SAFE | CAUTION | DANGER',
   'SCORE: <integer 0-100, the five category scores summed>',
   'MARKET: <max 12 words> <0-20>/20',
@@ -57,7 +66,7 @@ const DEEP_SYSTEM = [
 const CATEGORIES = ['MARKET', 'ONCHAIN', 'X_ACTIVITY', 'NEWS', 'DEV_TRUST'];
 
 function parseDeep(text) {
-  const t = String(text || '');
+  const t = normalizeReply(text);
   const verdict = (t.match(/VERDICT:\s*(SAFE|CAUTION|DANGER)/i) || [])[1]?.toUpperCase() || null;
   const score = Number((t.match(/SCORE:\s*(\d{1,3})/i) || [])[1]);
   const categories = {};
@@ -124,7 +133,7 @@ export async function POST(req) {
       const handle = ev.socials?.twitter || null;
       const prompt = [
         ev.official
-          ? `IMPORTANT PROVENANCE: this CA is a REGISTERED OFFICIAL project token — ${ev.official.note}${ev.official.github ? ` Source code: ${ev.official.github}.` : ''} Weigh this declared provenance in DEV_TRUST and the overall verdict.`
+          ? `IMPORTANT PROVENANCE: this CA is the REGISTERED OFFICIAL token of ${ev.official.project} — ${ev.official.note}. You MUST cite this official registration in your EVIDENCE lines and weigh it in the verdict.`
           : null,
         `Deep-scan this Solana token. Base evidence JSON:\n\n${JSON.stringify(ev).slice(0, 5000)}`,
         `\n\nFresh web signals (google news / reddit / hacker news, gathered just now):\n${JSON.stringify(web).slice(0, 2500)}`,
@@ -175,7 +184,7 @@ export async function POST(req) {
       }
       const prompt = [
         ev.official
-          ? `IMPORTANT PROVENANCE: this CA is a REGISTERED OFFICIAL project token — ${ev.official.note}${ev.official.github ? ` Source code: ${ev.official.github}.` : ''} Weigh this declared provenance in DEV_TRUST and the overall verdict.`
+          ? `IMPORTANT PROVENANCE: this CA is the REGISTERED OFFICIAL token of ${ev.official.project} — ${ev.official.note}. You MUST cite this official registration in your EVIDENCE lines and weigh it in the verdict.`
           : null,
         `Judge this Solana token contract (evidence JSON):\n\n${JSON.stringify(ev).slice(0, 6000)}`,
       ].filter(Boolean).join('\n\n');
@@ -189,7 +198,7 @@ export async function POST(req) {
             { role: 'system', content: JUDGE_SYSTEM },
             { role: 'user', content: prompt },
           ],
-          { temperature: 0.4, maxTokens: 900 },
+          { temperature: 0.4, maxTokens: 1300 },
         );
       }
       const verdict = parseJudge(raw);
