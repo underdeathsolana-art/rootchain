@@ -331,6 +331,33 @@ export default function LoomTerminal({ session, connector, onExit }) {
     out(`depth ${activeDepth(weaveRef.current)} · "${chosen.text.replace(/\s+/g, ' ').slice(0, 60)}" is now the tip — "w" continues from here.`);
   }
 
+  /** Publish the active loom to the wire — the "share" command and button. */
+  async function shareLoom(title = '') {
+    if (!weaveRef.current) {
+      out('no rtc-loom yet — "new <seed text>" starts one.', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('/api/shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: session.username,
+          code: session.code,
+          action: 'share-loom',
+          title: title || weaveRef.current.name || 'untitled loom',
+          name: weaveRef.current.name,
+          weave: weaveRef.current,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) out(data.text, 'ok');
+      else out(data.error, 'error');
+    } catch {
+      out('wire unreachable — is the terminal service running?', 'error');
+    }
+  }
+
   async function onSubmit(event) {
     event.preventDefault();
     const value = input.trim();
@@ -568,29 +595,11 @@ export default function LoomTerminal({ session, connector, onExit }) {
       return;
     }
     if (command === 'share') {
-      if (!weaveRef.current) {
+      if (!tail && !weaveRef.current) {
         out('no rtc-loom yet — "new <seed text>" starts one.', 'error');
         return;
       }
-      try {
-        const res = await fetch('/api/shares', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: session.username,
-            code: session.code,
-            action: 'share-loom',
-            title: tail || weaveRef.current.name || 'untitled loom',
-            name: weaveRef.current.name,
-            weave: weaveRef.current,
-          }),
-        });
-        const data = await res.json();
-        if (data.ok) out(data.text, 'ok');
-        else out(data.error, 'error');
-      } catch {
-        out('wire unreachable — is the terminal service running?', 'error');
-      }
+      await shareLoom(tail);
       return;
     }
     if (command === 'pull') {
@@ -652,7 +661,17 @@ export default function LoomTerminal({ session, connector, onExit }) {
         <section className="feedwrap live__feedwrap" aria-label="Loom channel">
           <div className="feedwrap__bar">
             <span>{busy ? 'weaving strands…' : `rtc-loom — ${stats}`}</span>
-            <span className="feedwrap__hint-sys">{weave?.name ? `saved as "${weave.name}"` : 'unsaved'}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => shareLoom()}
+                title="publish this loom to the wire for every operator"
+              >
+                Share loom
+              </button>
+              <span className="feedwrap__hint-sys">{weave?.name ? `saved as "${weave.name}"` : 'unsaved'}</span>
+            </span>
           </div>
 
           <div className="log" ref={scrollRef} role="log" aria-label="Loom output">

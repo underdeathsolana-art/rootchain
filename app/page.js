@@ -662,6 +662,24 @@ export default function Page() {
     [push, session?.code, session?.username],
   );
 
+  // Share the agent channel's recent turns to the wire — used by the
+  // "share conv" command and the Share talk button under the feed.
+  const shareAgentTalk = useCallback(async (title = '') => {
+    if (!session) {
+      push({ kind: 'error', text: 'register or log in first — shares belong to an operator.' });
+      return;
+    }
+    const agentLines = linesRef.current
+      .filter((l) => l.kind === 'agent' && l.full)
+      .slice(-15)
+      .map((l) => ({ tag: l.tag, text: l.full }));
+    if (!agentLines.length) {
+      push({ kind: 'error', text: 'no agent turns in the buffer yet — let Root & Chain talk first.' });
+      return;
+    }
+    await postCommandDesk('/api/shares', { action: 'share-conv', title, lines: agentLines }, 'ok', 'wire');
+  }, [postCommandDesk, push, session]);
+
   const runCommand = useCallback(
     async (raw) => {
       const entered = raw;
@@ -1087,15 +1105,7 @@ export default function Page() {
           const s0 = (rest[0] || '').toLowerCase();
           const tail = value.slice(word.length).trim();
           if (s0 === 'conv' || s0 === 'conversation') {
-            const agentLines = linesRef.current
-              .filter((l) => l.kind === 'agent' && l.full)
-              .slice(-15)
-              .map((l) => ({ tag: l.tag, text: l.full }));
-            if (!agentLines.length) {
-              push({ kind: 'error', text: 'no agent turns in the buffer yet — let Root & Chain talk first.' });
-              break;
-            }
-            await postCommandDesk('/api/shares', { action: 'share-conv', title: tail.slice(s0.length).trim(), lines: agentLines }, 'ok', 'wire');
+            await shareAgentTalk(tail.slice(s0.length).trim());
           } else if (s0 === 'text' || s0 === 'note') {
             const text = tail.slice(s0.length).trim();
             if (!text) {
@@ -1278,7 +1288,7 @@ export default function Page() {
           push({ kind: 'error', text: `rootchain: command not found: ${word}. Type "help".` });
       }
     },
-    [auto, copyCa, memory.count, memory.lastTopic, postCommandDesk, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, status],
+    [auto, copyCa, memory.count, memory.lastTopic, postCommandDesk, promptText, push, relay.online, relay.operators, relay.store, refreshMemory, refreshTopics, runAgentTurn, session, shareAgentTalk, status],
   );
 
   function onSubmit(event) {
@@ -1492,6 +1502,14 @@ export default function Page() {
                   Connect AI
                 </button>
               )}
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => shareAgentTalk()}
+                title="share the last agent turns to the wire"
+              >
+                Share talk
+              </button>
               <button
                 type="button"
                 className="btn btn--sm"
