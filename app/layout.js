@@ -1,4 +1,5 @@
 import './globals.css';
+import PrivyWrapper from '@/components/privywrapper';
 
 export const metadata = {
   title: 'Rootchain Terminal v1.0 — Secure Access',
@@ -12,10 +13,16 @@ export const viewport = {
   themeColor: '#0a0a0a',
 };
 
+// The identity layer ("identity" command: X login + embedded wallets) is
+// optional — without an app id the terminal renders exactly as before.
+const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID || '';
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <PrivyWrapper appId={PRIVY_APP_ID}>{children}</PrivyWrapper>
+      </body>
     </html>
   );
 }

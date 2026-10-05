@@ -12,6 +12,7 @@ import SocialTerminal from '@/components/socialterminal';
 import IdeTerminal from '@/components/ideterminal';
 import MarketTerminal from '@/components/marketterminal';
 import LoomTerminal from '@/components/loomterminal';
+import IdentityPanel from '@/components/identitypanel';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
 import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
@@ -37,6 +38,7 @@ const HELP_TEXT = [
   '  agents     show the latest Agent-01 / Agent-02 exchange',
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
+  '  identity   link X (Twitter) + create an embedded wallet (Privy)',
   '  disconnect detach your AI — Root & Chain return to the local engine',
   '  skill      edit skill.md — how the agents behave (language, style, focus)',
   '  readme     edit readme.md — background context for this terminal',
@@ -170,6 +172,7 @@ export default function Page() {
   const [ideMode, setIdeMode] = useState(false);
   const [marketPair, setMarketPair] = useState(null); // null | pool address — dexview is open
   const [loomMode, setLoomMode] = useState(false);
+  const [showIdentity, setShowIdentity] = useState(false);
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -1056,6 +1059,17 @@ export default function Page() {
           break;
         }
 
+        case 'identity':
+        case 'privy': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — the identity link belongs to an operator.' });
+            break;
+          }
+          setShowIdentity(true);
+          push({ kind: 'sys', text: 'opening identity panel — X + wallet…', instant: true });
+          break;
+        }
+
         case 'bridge':
           push({ kind: 'sys', text: BRIDGE_TEXT, speed: 4 });
           break;
@@ -1486,6 +1500,13 @@ export default function Page() {
             });
           }}
           onDismiss={() => setContextFile(null)}
+        />
+      ) : null}
+
+      {showIdentity && session ? (
+        <IdentityPanel
+          session={session}
+          onClose={() => setShowIdentity(false)}
         />
       ) : null}
 
