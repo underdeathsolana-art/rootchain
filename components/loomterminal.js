@@ -32,6 +32,8 @@ const HELP_LINES = [
   '  stage .............. direct the agent channel — Root & Chain weave',
   '                       their next turns around your active path',
   '  unstage ............ release the agents back to the topic files',
+  '  share [title] ...... publish this loom to the wire for every operator',
+  '  pull <id> .......... load a shared loom from the wire as your copy',
   '  guide .............. the full weaving guide · save/load/ls/rm persist looms',
   '  clear · exit',
 ];
@@ -563,6 +565,61 @@ export default function LoomTerminal({ session, connector, onExit }) {
       const data = await callLoom({ action: 'unstage' });
       if (data.ok) out(data.text, 'ok');
       else out(data.error, 'error');
+      return;
+    }
+    if (command === 'share') {
+      if (!weaveRef.current) {
+        out('no rtc-loom yet — "new <seed text>" starts one.', 'error');
+        return;
+      }
+      try {
+        const res = await fetch('/api/shares', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: session.username,
+            code: session.code,
+            action: 'share-loom',
+            title: tail || weaveRef.current.name || 'untitled loom',
+            name: weaveRef.current.name,
+            weave: weaveRef.current,
+          }),
+        });
+        const data = await res.json();
+        if (data.ok) out(data.text, 'ok');
+        else out(data.error, 'error');
+      } catch {
+        out('wire unreachable — is the terminal service running?', 'error');
+      }
+      return;
+    }
+    if (command === 'pull') {
+      if (!rest[0]) {
+        out('usage: pull <share id> — "shares" in the main terminal lists the wire.', 'error');
+        return;
+      }
+      try {
+        const res = await fetch('/api/shares', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: session.username, code: session.code, action: 'open', id: rest[0] }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          out(data.error, 'error');
+          return;
+        }
+        if (data.kind !== 'loom' || !data.weave) {
+          out(`share #${rest[0]} is a ${data.kind}, not a loom — open it from the main terminal instead.`, 'error');
+          return;
+        }
+        const copy = { ...data.weave, name: null };
+        setWeave(copy);
+        weaveRef.current = copy;
+        out(`pulled loom #${rest[0]}${data.title ? ` "${data.title}"` : ''} — ${countNodes(copy)} nodes, depth ${activeDepth(copy)} on the active path. It is your copy now; "save <name>" keeps it.`, 'ok');
+      } catch {
+        out('wire unreachable — is the terminal service running?', 'error');
+      }
       return;
     }
 

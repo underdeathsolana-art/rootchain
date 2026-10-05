@@ -39,6 +39,8 @@ const HELP_TEXT = [
   '             agents on | off | step  · control the live loop',
   '  connect    attach your own AI (MCP server / OpenAI-compatible)',
   '  identity   link X (Twitter) + create an embedded wallet (Privy)',
+  '  shares     the wire — looms, agent talks & notes shared by operators',
+  '             share conv [title] · share text <note> · share open <id>',
   '  disconnect detach your AI — Root & Chain return to the local engine',
   '  skill      edit skill.md — how the agents behave (language, style, focus)',
   '  readme     edit readme.md — background context for this terminal',
@@ -173,6 +175,7 @@ export default function Page() {
   const [marketPair, setMarketPair] = useState(null); // null | pool address — dexview is open
   const [loomMode, setLoomMode] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
+  const [identity, setIdentity] = useState(null); // Privy-verified links for the header chip
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
 
   const idRef = useRef(0);
@@ -426,6 +429,23 @@ export default function Page() {
     }, RELAY_INTERVAL);
     return () => clearInterval(id);
   }, [session, pollRelay]);
+
+  // ── operator identity (Privy-verified) — feeds the header profile chip ───
+  const refreshIdentity = useCallback(async () => {
+    if (!session) return;
+    try {
+      const params = new URLSearchParams({ username: session.username, code: session.code });
+      const res = await fetch(`/api/identity?${params.toString()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.ok) setIdentity(data.identity || null);
+    } catch {
+      /* keep previous */
+    }
+  }, [session]);
+
+  useEffect(() => {
+    refreshIdentity();
+  }, [refreshIdentity]);
 
   // ── price alerts (evaluated server-side on this 15s poll) ────────────────
   const pollAlerts = useCallback(async () => {
@@ -1059,6 +1079,52 @@ export default function Page() {
           break;
         }
 
+        case 'share': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — shares belong to an operator.' });
+            break;
+          }
+          const s0 = (rest[0] || '').toLowerCase();
+          const tail = value.slice(word.length).trim();
+          if (s0 === 'conv' || s0 === 'conversation') {
+            const agentLines = linesRef.current
+              .filter((l) => l.kind === 'agent' && l.full)
+              .slice(-15)
+              .map((l) => ({ tag: l.tag, text: l.full }));
+            if (!agentLines.length) {
+              push({ kind: 'error', text: 'no agent turns in the buffer yet — let Root & Chain talk first.' });
+              break;
+            }
+            await postCommandDesk('/api/shares', { action: 'share-conv', title: tail.slice(s0.length).trim(), lines: agentLines }, 'ok', 'wire');
+          } else if (s0 === 'text' || s0 === 'note') {
+            const text = tail.slice(s0.length).trim();
+            if (!text) {
+              push({ kind: 'error', text: 'usage: share text <note> — anything you want on the wire.' });
+              break;
+            }
+            await postCommandDesk('/api/shares', { action: 'share-text', text }, 'ok', 'wire');
+          } else if (s0 === 'open') {
+            if (!rest[1]) {
+              push({ kind: 'error', text: 'usage: share open <id> — "shares" lists the wire.' });
+              break;
+            }
+            await postCommandDesk('/api/shares', { action: 'open', id: rest[1] }, 'sys', 'wire');
+          } else {
+            await postCommandDesk('/api/shares', { action: 'list' }, 'sys', 'wire');
+          }
+          break;
+        }
+
+        case 'shares':
+        case 'wire': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first.' });
+            break;
+          }
+          await postCommandDesk('/api/shares', { action: 'list' }, 'sys', 'wire');
+          break;
+        }
+
         case 'identity':
         case 'privy': {
           if (!session) {
@@ -1347,6 +1413,30 @@ export default function Page() {
               >
                 {codeVisible ? '🙈' : '👁'}
               </button>
+              {identity && (identity.twitter || identity.wallets?.length) ? (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => setShowIdentity(true)}
+                  title="identity — X + wallet (click to manage)"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {identity.twitter?.profilePictureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={identity.twitter.profilePictureUrl.replace('_normal', '_mini')}
+                      alt=""
+                      width={16}
+                      height={16}
+                      style={{ borderRadius: '50%', verticalAlign: 'middle' }}
+                    />
+                  ) : null}
+                  {identity.twitter?.username ? `@${identity.twitter.username}` : 'identity'}
+                  {identity.wallets?.[0]?.address
+                    ? ` · ${identity.wallets[0].address.slice(0, 4)}…${identity.wallets[0].address.slice(-4)}`
+                    : ''}
+                </button>
+              ) : null}
               <button type="button" className="btn btn--ghost btn--sm" onClick={signOut}>
                 Sign out
               </button>
@@ -1507,6 +1597,7 @@ export default function Page() {
         <IdentityPanel
           session={session}
           onClose={() => setShowIdentity(false)}
+          onLinked={() => refreshIdentity()}
         />
       ) : null}
 

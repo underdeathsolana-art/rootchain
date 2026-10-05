@@ -91,6 +91,7 @@ export async function POST(req) {
           username: tw.username || tw.handle || null,
           name: tw.name || null,
           subject: tw.subject || tw.id || null,
+          profilePictureUrl: tw.profile_picture_url || tw.profilePictureUrl || null,
         }
       : null;
 

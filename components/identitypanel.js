@@ -16,7 +16,7 @@ function shortAddr(a) {
  * and reads the linked accounts straight from Privy's API — the browser
  * never supplies the values it wants saved.
  */
-export default function IdentityPanel({ session, onClose }) {
+export default function IdentityPanel({ session, onClose, onLinked }) {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
   const { wallets } = useWallets();
   const { createWallet } = useCreateWallet();
@@ -61,6 +61,7 @@ export default function IdentityPanel({ session, onClose }) {
       const data = await res.json();
       if (data.ok) {
         setIdentity(data.identity);
+        if (onLinked) onLinked(data.identity);
       } else {
         setError(data.error || 'sync refused.');
       }
