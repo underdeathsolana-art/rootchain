@@ -49,6 +49,9 @@ export default function IdentityPanel({ session, onClose, onLinked }) {
   const [configured, setConfigured] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [ascii, setAscii] = useState(null);
+  const [asciiBusy, setAsciiBusy] = useState(false);
+  const [savedAscii, setSavedAscii] = useState(false);
   const syncedRef = useRef('');
 
   const load = useCallback(async () => {
@@ -69,6 +72,13 @@ export default function IdentityPanel({ session, onClose, onLinked }) {
     load();
   }, [load]);
 
+  // Re-sync once on mount when a Privy session already exists — picks up
+  // avatar/name changes from re-links without waiting for a re-login.
+  useEffect(() => {
+    if (ready && authenticated) sync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, authenticated]);
+
   // Push the Privy session to the terminal whenever the account or wallets change.
   const sync = useCallback(async () => {
     if (!authenticated || busy) return;
@@ -86,6 +96,26 @@ export default function IdentityPanel({ session, onClose, onLinked }) {
       if (data.ok) {
         setIdentity(data.identity);
         if (onLinked) onLinked(data.identity);
+      } else if (/expired/i.test(String(data.error))) {
+        // A stale Privy token is normal after the tab slept — retry quietly,
+        // never surface a "reconnect" scare to the operator.
+        try {
+          const fresh = await getAccessToken();
+          if (fresh) {
+            const retry = await fetch('/api/identity', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: session.username, code: session.code, token: fresh }),
+            });
+            const data2 = await retry.json();
+            if (data2.ok) {
+              setIdentity(data2.identity);
+              if (onLinked) onLinked(data2.identity);
+            }
+          }
+        } catch {
+          /* silent */
+        }
       } else {
         setError(data.error || 'sync refused.');
       }
@@ -118,6 +148,45 @@ export default function IdentityPanel({ session, onClose, onLinked }) {
       setError(String(err?.message || err).slice(0, 160));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onMakeAscii() {
+    setAsciiBusy(true);
+    setError('');
+    setSavedAscii(false);
+    try {
+      const res = await fetch('/api/identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: session.username, code: session.code, action: 'ascii' }),
+      });
+      const data = await res.json();
+      if (data.ok) setAscii(data.ascii);
+      else setError(data.error);
+    } catch {
+      setError('avatar desk unreachable.');
+    } finally {
+      setAsciiBusy(false);
+    }
+  }
+
+  async function onSaveAscii() {
+    if (!ascii) return;
+    setAsciiBusy(true);
+    try {
+      const res = await fetch('/api/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: session.username, code: session.code, action: 'profile', ascii }),
+      });
+      const data = await res.json();
+      setSavedAscii(Boolean(data.ok));
+      if (!data.ok) setError(data.error || 'save refused.');
+    } catch {
+      setError('social desk unreachable.');
+    } finally {
+      setAsciiBusy(false);
     }
   }
 
@@ -189,8 +258,31 @@ export default function IdentityPanel({ session, onClose, onLinked }) {
           </div>
         </div>
 
+        {identity?.twitter?.username ? (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn--sm" onClick={onMakeAscii} disabled={asciiBusy}>
+                {asciiBusy && !ascii ? 'Rendering…' : 'ASCII from X avatar'}
+              </button>
+              {ascii ? (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={onSaveAscii} disabled={asciiBusy}>
+                  {savedAscii ? 'Saved ✓' : 'Save as profile ASCII'}
+                </button>
+              ) : null}
+            </div>
+            {ascii ? (
+              <pre
+                className="ascii"
+                style={{ margin: '10px 0 0', fontSize: '10px', lineHeight: 1.15, overflowX: 'auto' }}
+              >
+                {ascii}
+              </pre>
+            ) : null}
+          </div>
+        ) : null}
+
         {error ? (
-          <p className="err" role="alert" style={{ margin: '0 0 10px' }}>
+          <p className="err" role="alert" style={{ margin: '12px 0 10px' }}>
             {error}
           </p>
         ) : null}

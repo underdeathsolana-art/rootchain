@@ -680,6 +680,21 @@ export default function Page() {
     await postCommandDesk('/api/shares', { action: 'share-conv', title, lines: agentLines }, 'ok', 'wire');
   }, [postCommandDesk, push, session]);
 
+  // Compose an X post from the agent channel's latest turns — opens the
+  // tweet composer pre-filled, with the sources footnote.
+  const shareTalkToX = useCallback(() => {
+    const turns = linesRef.current.filter((l) => l.kind === 'agent' && l.full).slice(-2);
+    if (!turns.length) {
+      push({ kind: 'error', text: 'no agent turns yet — let Root & Chain talk first.' });
+      return;
+    }
+    const body = turns
+      .map((t) => `${t.tag}: ${String(t.full).replace(/\s+/g, ' ').slice(0, 100)}`)
+      .join('\n');
+    const text = `Rootchain agent talk\n${body}\n\nsources : rtcterminal.com`;
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }, [push]);
+
   const runCommand = useCallback(
     async (raw) => {
       const entered = raw;
@@ -1428,7 +1443,7 @@ export default function Page() {
                   type="button"
                   className="btn btn--ghost btn--sm"
                   onClick={() => setShowIdentity(true)}
-                  title="identity — X + wallet (click to manage)"
+                  title={`X profile linked to ${session.username}${identity.twitter?.name ? ` — ${identity.twitter.name}` : ''}${identity.twitter?.username ? ` (@${identity.twitter.username})` : ''}${identity.wallets?.[0]?.address ? ` · wallet ${identity.wallets[0].address}` : ''} · click to manage`}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
                   {identity.twitter?.profilePictureUrl ? (
@@ -1509,6 +1524,14 @@ export default function Page() {
                 title="share the last agent turns to the wire"
               >
                 Share talk
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={shareTalkToX}
+                title="compose an X post from the agent talk — sources: rtcterminal.com"
+              >
+                Share to 𝕏
               </button>
               <button
                 type="button"

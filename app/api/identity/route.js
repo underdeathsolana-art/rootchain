@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import sharp from 'sharp';
 import { findUserByCode, getOperatorIdentity, saveOperatorIdentity } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +52,40 @@ export async function POST(req) {
     return NextResponse.json({ ok: false, error: 'Unrecognised operator code.' }, { status: 403 });
   }
   const owner = user.username.toLowerCase();
+
+  if ((body.action || '').toLowerCase() === 'ascii') {
+    // ASCII art from the linked X profile picture — the terminal way to
+    // carry your avatar. 46 columns, brightness→glyph ramp, dark→light.
+    const identity = await getOperatorIdentity(owner);
+    const url = identity?.twitter?.profilePictureUrl;
+    if (!url) {
+      return NextResponse.json({ ok: false, error: 'No X avatar linked — connect X first.' }, { status: 400 });
+    }
+    try {
+      const big = url.replace(/_(normal|mini|bigger|200x200|400x400)\./, '_400x400.');
+      const img = await fetch(big, { headers: { 'user-agent': 'rootchain-terminal/1.0' } });
+      if (!img.ok) return NextResponse.json({ ok: false, error: `Avatar unreachable (${img.status}).` }, { status: 502 });
+      const buf = Buffer.from(await img.arrayBuffer());
+      const { data, info } = await sharp(buf)
+        .greyscale()
+        .resize({ width: 46, height: 23, fit: 'inside' })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const RAMP = ' .:-=+*#%@';
+      const lines = [];
+      for (let y = 0; y < info.height; y += 1) {
+        let row = '';
+        for (let x = 0; x < info.width; x += 1) {
+          const v = data[y * info.width + x] || 0;
+          row += RAMP[Math.min(RAMP.length - 1, Math.floor((v / 256) * RAMP.length))];
+        }
+        lines.push(row.replace(/\s+$/, ''));
+      }
+      return NextResponse.json({ ok: true, ascii: lines.join('\n') });
+    } catch (err) {
+      return NextResponse.json({ ok: false, error: `Avatar conversion failed — ${String(err.message || err).slice(0, 140)}` }, { status: 500 });
+    }
+  }
 
   if ((body.action || '').toLowerCase() === 'clear') {
     await saveOperatorIdentity(owner, { username: user.username, twitter: null, wallets: [], privyUserId: null, updatedAt: new Date().toISOString() });
