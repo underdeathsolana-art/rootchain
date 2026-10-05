@@ -7,6 +7,30 @@ function shortAddr(a) {
   return a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '';
 }
 
+/** A wallet address rendered as a click-to-copy chip (full address copies). */
+function CopyWallet({ address, label }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn--ghost btn--sm"
+      style={{ wordBreak: 'break-all', maxWidth: '100%' }}
+      title={`copy ${address}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(address);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard unavailable — the title still shows the address */
+        }
+      }}
+    >
+      {copied ? 'COPIED ✓' : `${shortAddr(address)}${label ? ` · ${label}` : ''} ⧉`}
+    </button>
+  );
+}
+
 /**
  * Identity panel — links an operator's terminal account to their X (Twitter)
  * and an embedded wallet through Privy. The flow: "connect" opens Privy's
@@ -143,29 +167,25 @@ export default function IdentityPanel({ session, onClose, onLinked }) {
                     : 'not linked'}
             </b>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
             <span style={{ flexShrink: 0 }}>Wallets</span>
-            <b style={{ flex: 1, minWidth: 0, textAlign: 'right', whiteSpace: 'pre-line', wordBreak: 'break-all' }}>
-              {!configured
-                ? 'not configured'
-                : (identity?.wallets || []).length
-                  ? identity.wallets.map((w) => `${shortAddr(w.address)}${w.chainType ? ` · ${w.chainType}` : ''}${w.embedded ? ' · embedded' : ''}`).join('\n')
-                  : wallets.length
-                    ? wallets.map((w) => shortAddr(w.address)).join(', ')
-                    : 'none yet'}
-            </b>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ flexShrink: 0 }}>Privy session</span>
-            <b style={{ flex: 1, minWidth: 0, textAlign: 'right', overflowWrap: 'break-word' }}>
-              {!configured
-                ? 'needs env vars (see above)'
-                : !ready
-                  ? 'loading…'
-                  : authenticated
-                    ? `live (${user?.id || 'user'})`
-                    : 'not connected'}
-            </b>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+              {!configured ? (
+                <b style={{ textAlign: 'right' }}>not configured</b>
+              ) : (identity?.wallets || []).length ? (
+                identity.wallets.map((w) => (
+                  <CopyWallet
+                    key={w.address}
+                    address={w.address}
+                    label={`${w.chainType || ''}${w.embedded ? ' · embedded' : ''}`.trim() || null}
+                  />
+                ))
+              ) : wallets.length ? (
+                wallets.map((w) => <CopyWallet key={w.address} address={w.address} />)
+              ) : (
+                <b style={{ textAlign: 'right' }}>none yet</b>
+              )}
+            </div>
           </div>
         </div>
 
