@@ -124,30 +124,47 @@ export default function IdentityPanel({ session, onClose }) {
 
         {!configured ? (
           <p className="err" role="alert">
-            Privy is not configured on this deploy — set NEXT_PUBLIC_PRIVY_APP_ID and PRIVY_APP_SECRET.
+            Privy is not configured on this deploy — add NEXT_PUBLIC_PRIVY_APP_ID and PRIVY_APP_SECRET in
+            Vercel (Settings → Environment Variables), then Redeploy. Local dev already works.
           </p>
         ) : null}
 
-        <div className="kv" style={{ display: 'grid', gap: '10px', marginBottom: '14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-            <span>X (Twitter)</span>
-            <b style={{ wordBreak: 'break-all' }}>
-              {tw?.username ? `@${tw.username}` : ready && authenticated ? 'not linked to this Privy account' : 'not linked'}
+        <div style={{ display: 'grid', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <span style={{ flexShrink: 0 }}>X (Twitter)</span>
+            <b style={{ flex: 1, minWidth: 0, textAlign: 'right', overflowWrap: 'break-word' }}>
+              {!configured
+                ? 'not configured'
+                : tw?.username
+                  ? `@${tw.username}`
+                  : ready && authenticated
+                    ? 'not linked to this Privy account'
+                    : 'not linked'}
             </b>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-            <span>Wallets</span>
-            <b style={{ wordBreak: 'break-all', textAlign: 'right' }}>
-              {(identity?.wallets || []).length
-                ? identity.wallets.map((w) => `${shortAddr(w.address)}${w.chainType ? ` · ${w.chainType}` : ''}${w.embedded ? ' · embedded' : ''}`).join('\n')
-                : wallets.length
-                  ? wallets.map((w) => shortAddr(w.address)).join(', ')
-                  : 'none yet'}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <span style={{ flexShrink: 0 }}>Wallets</span>
+            <b style={{ flex: 1, minWidth: 0, textAlign: 'right', whiteSpace: 'pre-line', wordBreak: 'break-all' }}>
+              {!configured
+                ? 'not configured'
+                : (identity?.wallets || []).length
+                  ? identity.wallets.map((w) => `${shortAddr(w.address)}${w.chainType ? ` · ${w.chainType}` : ''}${w.embedded ? ' · embedded' : ''}`).join('\n')
+                  : wallets.length
+                    ? wallets.map((w) => shortAddr(w.address)).join(', ')
+                    : 'none yet'}
             </b>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-            <span>Privy session</span>
-            <b>{!ready ? 'loading…' : authenticated ? `live (${user?.id || 'user'})` : 'not connected'}</b>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ flexShrink: 0 }}>Privy session</span>
+            <b style={{ flex: 1, minWidth: 0, textAlign: 'right', overflowWrap: 'break-word' }}>
+              {!configured
+                ? 'needs env vars (see above)'
+                : !ready
+                  ? 'loading…'
+                  : authenticated
+                    ? `live (${user?.id || 'user'})`
+                    : 'not connected'}
+            </b>
           </div>
         </div>
 
