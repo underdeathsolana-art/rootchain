@@ -13,6 +13,7 @@ import IdeTerminal from '@/components/ideterminal';
 import MarketTerminal from '@/components/marketterminal';
 import LoomTerminal from '@/components/loomterminal';
 import IdentityPanel from '@/components/identitypanel';
+import ScannerTerminal from '@/components/scannerminal';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
 import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
@@ -50,6 +51,8 @@ const HELP_TEXT = [
   '  chat live  open the live operator terminal (roster + direct chat)',
   '  social     open Rootchain Social — posts, replies, bio & ASCII profile',
   '  dexview    open the DEX chart for the token — dexview <link|pool|CA>',
+  '  scan       open the AI CONTRACT SCANNER — paste a Solana CA, get a',
+  '             verdict (on-chain + github + market evidence, shareable to X)',
   '  sim        paper trading desk — fake money, real prices: sim buy 100',
   '             sim buy <usd|all> [ca] · sim sell <usd|all> · sim top · sim reset',
   '  alert      arm a price alert — alert rtc > 0.00002 fires when crossed',
@@ -174,6 +177,7 @@ export default function Page() {
   const [ideMode, setIdeMode] = useState(false);
   const [marketPair, setMarketPair] = useState(null); // null | pool address — dexview is open
   const [loomMode, setLoomMode] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   const [identity, setIdentity] = useState(null); // Privy-verified links for the header chip
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
@@ -1161,6 +1165,17 @@ export default function Page() {
           break;
         }
 
+        case 'scan':
+        case 'scanner': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — the scanner belongs to an operator.' });
+            break;
+          }
+          setScanMode(true);
+          push({ kind: 'sys', text: 'opening the AI contract scanner…', instant: true });
+          break;
+        }
+
         case 'bridge':
           push({ kind: 'sys', text: BRIDGE_TEXT, speed: 4 });
           break;
@@ -1380,6 +1395,16 @@ export default function Page() {
           setLiveMode(false);
           setLiveChannel('relay');
         }}
+      />
+    );
+  }
+
+  if (scanMode && session) {
+    return (
+      <ScannerTerminal
+        session={session}
+        connector={connector}
+        onExit={() => setScanMode(false)}
       />
     );
   }
