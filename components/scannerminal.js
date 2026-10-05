@@ -79,6 +79,10 @@ export default function ScannerTerminal({ session, connector, onExit }) {
   function printEvidence(ev, h) {
     const t = ev.token;
     out(`TARGET — ${ev.ca}`);
+    if (ev.official) {
+      out(`★ OFFICIAL ${ev.official.project} PROJECT TOKEN — ${ev.official.note}`, 'ok');
+      if (ev.official.github) out(`  source code: ${ev.official.github}`, 'ok');
+    }
     if (t) {
       out([
         'MARKET (dexscreener)',
@@ -206,7 +210,8 @@ export default function ScannerTerminal({ session, connector, onExit }) {
     const graded = v.categories
       ? `\n${Object.entries(v.categories).map(([k, c]) => `${k.toLowerCase()} ${c.points}/20`).join(' · ')}`
       : '';
-    const text = `$${sym} contract scan — ${v.verdict} ${v.score}/100 (${judge})\n${facts}${graded}\n${v.summary || ''}\n\nsources : rtcterminal.com`;
+    const official = ev.official ? `official ${ev.official.project} token\n` : '';
+    const text = `$${sym} contract scan — ${v.verdict} ${v.score}/100 (${judge})\n${official}${facts}${graded}\n${v.summary || ''}\n\nsources : rtcterminal.com`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }
 

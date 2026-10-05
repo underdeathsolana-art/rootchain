@@ -123,11 +123,14 @@ export async function POST(req) {
       const web = await deepEvidence(ev);
       const handle = ev.socials?.twitter || null;
       const prompt = [
+        ev.official
+          ? `IMPORTANT PROVENANCE: this CA is a REGISTERED OFFICIAL project token — ${ev.official.note}${ev.official.github ? ` Public source: ${ev.official.github}` : ''}. Weigh this declared provenance in DEV_TRUST and the overall verdict.`
+          : null,
         `Deep-scan this Solana token. Base evidence JSON:\n\n${JSON.stringify(ev).slice(0, 5000)}`,
         `\n\nFresh web signals (google news / reddit / hacker news, gathered just now):\n${JSON.stringify(web).slice(0, 2500)}`,
         handle ? `\nThe token's X handle is @${handle} — research its activity if you can browse.` : '\nNo X handle found on the token profile.',
         ev.chain?.devWallet ? `Dev (metadata authority) wallet: ${ev.chain.devWallet} — check scam history if you can browse.` : 'Metadata authority appears renounced.',
-      ].join('\n');
+      ].filter(Boolean).join('\n');
 
       let raw;
       if (connector.type === 'mcp') {
@@ -170,7 +173,12 @@ export async function POST(req) {
           { status: 400 },
         );
       }
-      const prompt = `Judge this Solana token contract (evidence JSON):\n\n${JSON.stringify(ev).slice(0, 6000)}`;
+      const prompt = [
+        ev.official
+          ? `IMPORTANT PROVENANCE: this CA is a REGISTERED OFFICIAL project token — ${ev.official.note}${ev.official.github ? ` Public source: ${ev.official.github}` : ''}. Weigh this declared provenance in DEV_TRUST and the overall verdict.`
+          : null,
+        `Judge this Solana token contract (evidence JSON):\n\n${JSON.stringify(ev).slice(0, 6000)}`,
+      ].filter(Boolean).join('\n\n');
       let raw;
       if (connector.type === 'mcp') {
         raw = (await callMcp(connector, { system: JUDGE_SYSTEM, prompt })).text;
