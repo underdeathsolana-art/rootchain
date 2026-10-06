@@ -28,5 +28,5 @@ export async function GET(req) {
       { status: 404 },
     );
   }
-  return NextResponse.json({ ok: true, rev: 1, pair });
+  return NextResponse.json({ ok: true, rev: 2, pair });
 }

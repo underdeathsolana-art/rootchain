@@ -245,6 +245,7 @@ export default function MarketTerminal({ session, initialPair, onExit }) {
   const idRef = useRef(0);
   const busyRef = useRef(false);
   const bootedRef = useRef(false);
+  const havePairRef = useRef(false);
   const chartRef = useRef(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -259,15 +260,21 @@ export default function MarketTerminal({ session, initialPair, onExit }) {
       const res = await fetch(`/api/market?pair=${encodeURIComponent(addr)}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.ok) {
+        havePairRef.current = true;
         setPair(data.pair);
         setPairError('');
+      } else if (havePairRef.current) {
+        // transient upstream hiccup (rate limit, blip) — hold the last quote
+        // instead of flashing the whole terminal to an error screen.
+        sys('pair feed hiccup — holding last quote.', 'error');
       } else {
         setPairError(data.error || 'pair unreachable.');
       }
     } catch {
-      setPairError('market feed unreachable — is the terminal service running?');
+      if (havePairRef.current) sys('market feed hiccup — holding last quote.', 'error');
+      else setPairError('market feed unreachable — is the terminal service running?');
     }
-  }, []);
+  }, [sys]);
 
   const loadCandles = useCallback(async (addr, useTf) => {
     try {
@@ -276,7 +283,7 @@ export default function MarketTerminal({ session, initialPair, onExit }) {
         { cache: 'no-store' },
       );
       const data = await res.json();
-      setCandles(data.ok ? data.candles : null);
+      if (data.ok && data.candles?.length) setCandles(data.candles);
     } catch {
       /* keep previous candles */
     }
@@ -301,7 +308,7 @@ export default function MarketTerminal({ session, initialPair, onExit }) {
     if (bootedRef.current) return;
     bootedRef.current = true;
     sys('ROOTCHAIN MARKET // DEX VIEW', 'head');
-    sys('candles: geckoterminal · stats: dexscreener · "help" lists wall commands');
+    sys('candles: geckoterminal · stats: dexscreener + gecko fallback · "help" lists wall commands');
     (async () => {
       await loadPair(initialPair || DEFAULT_PAIR);
     })();
@@ -466,7 +473,7 @@ export default function MarketTerminal({ session, initialPair, onExit }) {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    dexscreener ↗
+                    {pair.source || 'dexscreener'} ↗
                   </a>
                 ) : null}
               </div>
@@ -500,7 +507,7 @@ export default function MarketTerminal({ session, initialPair, onExit }) {
                   {key}
                 </button>
               ))}
-              <span className="mkt__tfsrc">candles: geckoterminal · stats: dexscreener</span>
+              <span className="mkt__tfsrc">candles: gecko · stats: dexscreener/gecko</span>
             </div>
 
             <div className="mkt__chartbox" ref={chartRef}>
