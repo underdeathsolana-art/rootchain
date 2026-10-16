@@ -20,6 +20,7 @@ import {
   connectWallet,
   detectWallets,
   estimateLaunchFees,
+  fetchWalletBalanceLamports,
   lamportsToSol,
   makeLaunchConnection,
   signSendConfirm,
@@ -87,6 +88,7 @@ export default function Launchpad({ session, onExit }) {
 
   /* ------------------------------ launch flow ----------------------------- */
   const [fees, setFees] = useState(null);
+  const [balanceLamports, setBalanceLamports] = useState(null); // null = unknown
   const [stage, setStage] = useState('idle');
   const [log, setLog] = useState([]);
   const [result, setResult] = useState(null); // { signature, mint, feeLamports, slot }
@@ -152,8 +154,15 @@ export default function Launchpad({ session, onExit }) {
         push('wallet', `${w.name} connected · ${shortAddr(w.publicKeyBase58, 8, 6)}`, 'ok');
         try {
           const connection = makeLaunchConnection({ username: opUser, code: opCode });
-          const f = await estimateLaunchFees(connection);
+          const [f, bal] = await Promise.all([
+            estimateLaunchFees(connection, { username: opUser, code: opCode }),
+            fetchWalletBalanceLamports(connection, w.publicKeyBase58),
+          ]);
           setFees(f);
+          setBalanceLamports(bal);
+          if (bal !== null && f && bal < f.totalLamports) {
+            push('fees', `wallet holds ${fmtSol(bal)} — below the ${fmtSol(f.totalLamports)} launch estimate`, 'warn');
+          }
         } catch (e) {
           push('fees', 'fee estimate unavailable — defaults will be used', 'warn');
         }
@@ -172,6 +181,7 @@ export default function Launchpad({ session, onExit }) {
       if (wallet && wallet.provider && wallet.provider.disconnect) wallet.provider.disconnect();
     } catch (_) {}
     setWallet(null);
+    setBalanceLamports(null);
     push('wallet', 'wallet disconnected');
   }, [wallet, push]);
 
@@ -255,7 +265,15 @@ export default function Launchpad({ session, onExit }) {
   }, []);
 
   /* ------------------------------ launch flow ----------------------------- */
-  const canLaunch = !!wallet && vanity.phase === 'found' && formValid && !busy && !launchedRef.current;
+  const canLaunch =
+    !!wallet &&
+    vanity.phase === 'found' &&
+    formValid &&
+    !busy &&
+    !launchedRef.current &&
+    !(fees && balanceLamports !== null && balanceLamports < fees.totalLamports);
+
+  const underfunded = fees && balanceLamports !== null && balanceLamports < fees.totalLamports;
 
   const onLaunch = useCallback(async () => {
     if (!canLaunch) return;
@@ -373,7 +391,9 @@ export default function Launchpad({ session, onExit }) {
       ? 'generate a *root mint first'
       : !formValid
         ? 'complete the token form'
-        : '';
+        : underfunded
+          ? 'wallet balance is below the fee estimate — top up and reconnect'
+          : '';
 
   const disabledReason = useMemo(() => {
     if (!name && !symbol && !image) return 'fill in the token form';
@@ -460,7 +480,7 @@ export default function Launchpad({ session, onExit }) {
                     {image ? image.name : 'click to select a file'}
                   </span>
                   <span className="lp-drop__hint">
-                    png · jpeg · gif · webp — 5MB max{image ? ` · ${(image.size / 1024).toFixed(0)}KB` : ''}
+                    png · jpeg · gif · webp — 4MB max{image ? ` · ${(image.size / 1024).toFixed(0)}KB` : ''}
                   </span>
                 </span>
                 <input
@@ -680,7 +700,20 @@ export default function Launchpad({ session, onExit }) {
                   <span>estimated total</span>
                   <span>{fees ? fmtSol(fees.totalLamports) : '≈0.0021 SOL'}</span>
                 </div>
+                {wallet ? (
+                  <div className="lp-fees__row">
+                    <span>wallet balance</span>
+                    <span className={underfunded ? 'lp-err' : ''}>
+                      {balanceLamports === null ? 'unknown' : fmtSol(balanceLamports)}
+                    </span>
+                  </div>
+                ) : null}
               </div>
+              {underfunded ? (
+                <p className="lp-err">
+                  wallet balance is below the launch estimate — top it up, disconnect and reconnect to re-check.
+                </p>
+              ) : null}
               <p className="lp-note">
                 estimate only — the exact fee and rent come from the confirmed transaction. the wallet pays everything;
                 rootchain charges nothing.

@@ -49,7 +49,9 @@ const RPC_METHOD_ALLOWLIST = new Set([
 
 const RPC_BODY_LIMIT = 512 * 1024;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+// 4MB: Vercel caps request bodies at 4.5MB — keep our own limit under it so
+// oversized images get OUR error, not an opaque edge 413.
+const IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 
 /* ------------------------------ rate limits ------------------------------ */
 // best-effort sliding windows (Map per warm serverless instance)
@@ -220,7 +222,7 @@ async function handleMeta(req) {
   if (form.get('telegram') && telegram === null) return denied('Telegram URL looks invalid.', 400);
   if (!image || typeof image === 'string') return denied('token image is required.', 400);
   if (!IMAGE_TYPES.has(image.type)) return denied('image must be png, jpeg, gif or webp.', 400);
-  if (image.size > IMAGE_MAX_BYTES) return denied('image too large — 5MB max.', 400);
+  if (image.size > IMAGE_MAX_BYTES) return denied('image too large — 4MB max.', 400);
 
   const symbol = symbolRaw.toUpperCase();
 
