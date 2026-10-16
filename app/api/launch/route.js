@@ -44,6 +44,7 @@ const RPC_METHOD_ALLOWLIST = new Set([
   'getBalance',
   'getFeeForMessage',
   'getPriorityFeeEstimate',
+  'getRecentPrioritizationFees',
   'getMinimumBalanceForRentExemption',
   'sendTransaction', // signed transaction relay — cannot be forged server-side
 ]);
