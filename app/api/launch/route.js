@@ -294,7 +294,7 @@ async function handleCoin(req, body) {
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
     });
   } catch (_) {
-    return denied('pump.fun coin API unreachable', 502);
+    return denied('coin listing API unreachable', 502);
   }
 }
 

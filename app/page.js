@@ -108,7 +108,7 @@ const ABOUT_TEXT = [
 'LAUNCHPAD',
 '  "launch" opens the token launchpad: mint a coin whose address ends',
 '  in *root. The vanity keypair is generated and verified locally in your',
-'  browser, your wallet signs the pump.fun create_v2 transaction, and the',
+'  browser, your wallet signs the create_v2 transaction, and the',
 '  launch is verified on-chain before anything is called live.',
 '',
 'ALERTS & WATCHLIST',

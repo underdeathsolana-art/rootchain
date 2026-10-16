@@ -345,7 +345,7 @@ export default function Launchpad({ session, onExit }) {
       });
       launchedRef.current = true;
       setStage('done');
-      push('launch', `LIVE — ${name.trim()} (${symbol.trim().toUpperCase()}) launched on pump.fun in ${fmtDuration((Date.now() - startedAt) / 1000)}`, 'ok');
+      push('launch', `LIVE — ${name.trim()} (${symbol.trim().toUpperCase()}) launched on-chain in ${fmtDuration((Date.now() - startedAt) / 1000)}`, 'ok');
     } catch (e) {
       const msg = String((e && e.message) || e);
       setLaunchErr(/user rejected|user denied/i.test(msg) ? 'you rejected the transaction in the wallet' : msg);
@@ -385,7 +385,7 @@ export default function Launchpad({ session, onExit }) {
       <header className="lp-hdr">
         <div className="lp-hdr__left">
           <h1 className="lp-hdr__title">Launchpad</h1>
-          <span className="lp-hdr__sub">pump.fun · solana mainnet</span>
+          <span className="lp-hdr__sub">solana mainnet</span>
           <span className="lp-suffix">
             suffix <b>*{VANITY_SUFFIX}</b>
           </span>
@@ -619,7 +619,7 @@ export default function Launchpad({ session, onExit }) {
                 <div className="lp-vanity">
                   <p className="lp-note">
                     generate a fresh solana mint whose address ends exactly in <b>*{VANITY_SUFFIX}</b> (case-sensitive,
-                    part of the address itself). pump.fun&apos;s current <b>create_v2</b> flow accepts a
+                    part of the address itself). the current <b>create_v2</b> launch flow accepts a
                     caller-supplied mint keypair, so the suffix is real — but finding it is probabilistic: expect
                     roughly <b>{fmtInt(expAttempts)}</b> keypairs on average, typically minutes at full speed.
                   </p>
@@ -657,7 +657,7 @@ export default function Launchpad({ session, onExit }) {
                     <div className="lp-preview__name">{name.trim() || 'unnamed token'}</div>
                     <div className="lp-preview__sym">${symbol.trim() || 'TICKER'}</div>
                     <div className="lp-preview__meta">
-                      pump.fun bonding curve · solana mainnet{website.trim() ? ` · ${website.trim()}` : ''}
+                      bonding curve · solana mainnet{website.trim() ? ` · ${website.trim()}` : ''}
                     </div>
                   </div>
                 </div>
@@ -699,13 +699,13 @@ export default function Launchpad({ session, onExit }) {
                       <button type="button" className={`lp-copy${copied === 'result' ? ' lp-copy--done' : ''}`} onClick={() => copy(result.mint, 'result')}>
                         {copied === 'result' ? 'copied ✓' : 'copy mint'}
                       </button>
-                      <a className="lp-link" href={LINKS.pumpCoin(result.mint)} target="_blank" rel="noreferrer noopener">pump.fun ↗</a>
+                      <a className="lp-link" href={LINKS.pumpCoin(result.mint)} target="_blank" rel="noreferrer noopener">coin ↗</a>
                       <a className="lp-link" href={LINKS.solscanToken(result.mint)} target="_blank" rel="noreferrer noopener">solscan ↗</a>
                       <a className="lp-link" href={LINKS.solscanTx(result.signature)} target="_blank" rel="noreferrer noopener">tx ↗</a>
                     </div>
                     <span className="lp-mint__note">
                       actual network cost {fmtSol(result.feeLamports)} (fees) + rent · slot {fmtInt(result.slot)}
-                      {coinInfo ? ` · pump.fun listing live` : ''}
+                      {coinInfo ? ` · listing live` : ''}
                     </span>
                   </div>
                   <button type="button" className="lp-btn lp-btn--ghost" onClick={resetLaunch}>
@@ -720,7 +720,7 @@ export default function Launchpad({ session, onExit }) {
                         <span className="lp-spin" /> {stage}…
                       </>
                     ) : (
-                      <>▲ launch on pump.fun</>
+                      <>▲ launch token</>
                     )}
                   </button>
                   {!busy && launchBlockReason ? (
