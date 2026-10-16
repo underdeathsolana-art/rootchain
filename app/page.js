@@ -14,6 +14,7 @@ import MarketTerminal from '@/components/marketterminal';
 import LoomTerminal from '@/components/loomterminal';
 import IdentityPanel from '@/components/identitypanel';
 import ScannerTerminal from '@/components/scannerminal';
+import Launchpad from '@/components/launchpad';
 import { userColor } from '@/lib/usercolor';
 import { TOKEN_CA, asksForCa } from '@/lib/ca';
 import { parseMarketArg, DEFAULT_PAIR } from '@/lib/market';
@@ -53,6 +54,8 @@ const HELP_TEXT = [
   '  dexview    open the DEX chart for the token — dexview <link|pool|CA>',
   '  scan       open the AI CONTRACT SCANNER — paste a Solana CA, get a',
   '             verdict (on-chain + github + market evidence, shareable to X)',
+  '  launch     pump.fun launchpad — launch a coin whose mint address ends',
+  '             in *root · vanity keypair made + verified in your browser',
   '  sim        paper trading desk — fake money, real prices: sim buy 100',
   '             sim buy <usd|all> [ca] · sim sell <usd|all> · sim top · sim reset',
   '  alert      arm a price alert — alert rtc > 0.00002 fires when crossed',
@@ -101,6 +104,12 @@ const ABOUT_TEXT = [
 '  USDC and trades the same live prices the dex view sees. "sim top"',
 '  ranks every operator by equity, "sim reset" starts a wallet over.',
 '  Fake money only — nothing on-chain ever moves.',
+'',
+'LAUNCHPAD',
+'  "launch" opens the pump.fun launchpad: mint a coin whose address ends',
+'  in *root. The vanity keypair is generated and verified locally in your',
+'  browser, your wallet signs the pump.fun create_v2 transaction, and the',
+'  launch is verified on-chain before anything is called live.',
 '',
 'ALERTS & WATCHLIST',
 '  "alert rtc > 0.00002" arms a one-shot alert — the terminal checks the',
@@ -178,6 +187,7 @@ export default function Page() {
   const [marketPair, setMarketPair] = useState(null); // null | pool address — dexview is open
   const [loomMode, setLoomMode] = useState(false);
   const [scanMode, setScanMode] = useState(false);
+  const [launchMode, setLaunchMode] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   const [identity, setIdentity] = useState(null); // Privy-verified links for the header chip
   const [status, setStatus] = useState({ link: 'local', source: 'local', memory: false, model: 'local', error: '' });
@@ -1176,6 +1186,18 @@ export default function Page() {
           break;
         }
 
+        case 'launch':
+        case 'launchpad':
+        case 'pump': {
+          if (!session) {
+            push({ kind: 'error', text: 'register or log in first — the launchpad belongs to an operator.' });
+            break;
+          }
+          setLaunchMode(true);
+          push({ kind: 'sys', text: 'opening the pump.fun launchpad — *root vanity mint…', instant: true });
+          break;
+        }
+
         case 'bridge':
           push({ kind: 'sys', text: BRIDGE_TEXT, speed: 4 });
           break;
@@ -1417,6 +1439,10 @@ export default function Page() {
         onExit={() => setLoomMode(false)}
       />
     );
+  }
+
+  if (launchMode && session) {
+    return <Launchpad session={session} onExit={() => setLaunchMode(false)} />;
   }
 
   // dexview is public — guests may watch the chart and read the wall
