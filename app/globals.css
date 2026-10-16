@@ -1059,3 +1059,113 @@ button, input, textarea { font: inherit; color: inherit; }
   25% { transform: rotate(1.1deg) translateY(-1px); }
   75% { transform: rotate(-1.1deg) translateY(-1px); }
 }
+
+/* ── boot easter egg · the daemon wakes the terminal ──────────────────── */
+.bm {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg);
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+.bm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom,
+    rgba(255, 255, 255, 0.022) 0px, rgba(255, 255, 255, 0.022) 1px,
+    transparent 1px, transparent 3px);
+}
+.bm[data-phase='exit'] { animation: bm-fade 0.45s ease 0.1s forwards; }
+
+.bm-cat { position: relative; }
+.bm-art {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(6.5px, 2.1vw, 13px);
+  line-height: 1.12;
+  color: var(--fg);
+  text-shadow: 0 0 7px rgba(255, 176, 0, 0.38);
+  white-space: pre;
+}
+.bm-row {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(7px);
+  animation: bm-row-in 0.34s var(--ease) forwards;
+  animation-delay: var(--d, 0ms);
+}
+.bm-tip { color: var(--fg-bright); animation: mascot-tip 1.5s ease-in-out infinite; }
+
+/* charge: the lantern fills, the phosphor heats up */
+.bm[data-phase='charge'] .bm-art { filter: brightness(1.28); }
+.bm[data-phase='charge'] .bm-tip { animation-duration: 0.35s; }
+
+/* pounce + CRT power flash (reuses the mascot-pounce hop) */
+.bm[data-phase='pounce'] .bm-cat {
+  transform-origin: 50% 92%;
+  animation: mascot-pounce 0.65s var(--ease);
+}
+.bm-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(120% 90% at 50% 50%,
+    rgba(255, 214, 130, 0.55), rgba(255, 176, 0, 0.18) 45%, transparent 75%);
+}
+.bm[data-phase='pounce'] .bm-flash { animation: bm-flash 0.5s ease-out; }
+
+/* exit: the daemon leaps home (top-right, where the panel lives) */
+.bm[data-phase='exit'] .bm-cat {
+  animation: bm-exit 0.55s var(--ease) forwards;
+}
+
+.bm-line {
+  margin: 0;
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: var(--step-1);
+  letter-spacing: 0.04em;
+  opacity: 0;
+  animation: bm-row-in 0.4s ease 0.5s forwards;
+}
+.bm-line__prompt { color: var(--faint); }
+.bm-hint {
+  position: absolute;
+  bottom: 18px;
+  margin: 0;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: var(--step-0);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: bm-row-in 0.4s ease 1.2s forwards;
+}
+
+@keyframes bm-row-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes bm-flash {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes bm-exit {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  30% { transform: translate(4vw, -2vh) scale(0.8); opacity: 1; }
+  100% { transform: translate(42vw, -32vh) scale(0.1) rotate(8deg); opacity: 0; }
+}
+@keyframes bm-fade {
+  to { opacity: 0; visibility: hidden; }
+}

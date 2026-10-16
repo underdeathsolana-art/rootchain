@@ -1,5 +1,6 @@
 import './globals.css';
 import PrivyWrapper from '@/components/privywrapper';
+import BootMascot from '@/components/bootmascot';
 
 export const metadata = {
   title: 'Rootchain Terminal v1.0 — Secure Access',
@@ -22,6 +23,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <PrivyWrapper appId={PRIVY_APP_ID}>{children}</PrivyWrapper>
+        <BootMascot />
       </body>
     </html>
   );
