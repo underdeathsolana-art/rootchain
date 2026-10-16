@@ -454,7 +454,7 @@ export default function Launchpad({ session, connector, onExit }) {
   const launchBlockReason = !wallet
     ? 'connect a wallet first'
     : vanity.phase !== 'found'
-      ? 'generate a *root mint first'
+      ? `generate a *${VANITY_SUFFIX} mint first`
       : !formValid
         ? 'complete the token form'
         : underfunded

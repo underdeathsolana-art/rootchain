@@ -55,7 +55,7 @@ const HELP_TEXT = [
   '  scan       open the AI CONTRACT SCANNER — paste a Solana CA, get a',
   '             verdict (on-chain + github + market evidence, shareable to X)',
   '  launch     the token launchpad — launch a coin whose mint address ends',
-  '             in *root · vanity keypair made + verified in your browser',
+  '             in *rtc · vanity keypair made + verified in your browser',
   '  sim        paper trading desk — fake money, real prices: sim buy 100',
   '             sim buy <usd|all> [ca] · sim sell <usd|all> · sim top · sim reset',
   '  alert      arm a price alert — alert rtc > 0.00002 fires when crossed',
@@ -107,7 +107,7 @@ const ABOUT_TEXT = [
 '',
 'LAUNCHPAD',
 '  "launch" opens the token launchpad: mint a coin whose address ends',
-'  in *root. The vanity keypair is generated and verified locally in your',
+'  in *rtc. The vanity keypair is generated and verified locally in your',
 '  browser, your wallet signs the create_v2 transaction, and the',
 '  launch is verified on-chain before anything is called live.',
 '',
@@ -1194,7 +1194,7 @@ export default function Page() {
             break;
           }
           setLaunchMode(true);
-          push({ kind: 'sys', text: 'opening the launchpad — *root vanity mint…', instant: true });
+          push({ kind: 'sys', text: 'opening the launchpad — *rtc vanity mint…', instant: true });
           break;
         }
 

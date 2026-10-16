@@ -1,7 +1,7 @@
 /* Rootchain Launchpad · vanity mint worker ---------------------------------
  *
  * Self-contained (no imports): grinds Ed25519 keypairs via WebCrypto until a
- * base58 public key ends with the requested suffix (default "root").
+ * base58 public key ends with the requested suffix (default "rtc").
  *
  * Runs OFF the main thread. The private key never leaves this worker except
  * once, as a PKCS#8 blob, when a match is found. Nothing is logged, stored

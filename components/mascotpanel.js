@@ -45,7 +45,7 @@ const AGENT_NAMES = { root: 'Agent-01 Root', link: 'Agent-02 Chain' };
 
 const REACTIONS = [
   { id: 'pounce', ms: 1000, caption: '*pounce!* the daemon cat greets you — terminal nominal' },
-  { id: 'zap', ms: 800, caption: '⚡ tail charged — *root mode armed' },
+  { id: 'zap', ms: 800, caption: '⚡ tail charged — *rtc mode armed' },
   { id: 'purr', ms: 2000, caption: 'purring at 60 fps — the channel hums along' },
 ];
 
