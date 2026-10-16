@@ -27,6 +27,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const UPSTREAM_RPC = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const RPC_FALLBACK = 'https://api.mainnet-beta.solana.com';
 const PINATA_JWT = process.env.PINATA_JWT || '';
 const PINATA_GATEWAY = (process.env.PINATA_GATEWAY || 'https://gateway.pinata.cloud').replace(/\/+$/, '');
 
@@ -123,26 +124,38 @@ async function handleRpcProxy(req) {
     return denied('RPC method not allowed by the launch proxy.', 403);
   }
 
-  try {
-    const upstream = await fetch(UPSTREAM_RPC, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: body.id ?? 1,
-        method: body.method,
-        params: body.params ?? [],
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    const text = await upstream.text();
-    return new NextResponse(text, {
-      status: upstream.status,
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-    });
-  } catch (e) {
-    return denied('upstream RPC unreachable — try again shortly', 502);
+  // try the configured upstream first, then the public mainnet RPC as a
+  // safety net — a broken SOLANA_RPC_URL must not take the launchpad down.
+  const payload = JSON.stringify({
+    jsonrpc: '2.0',
+    id: body.id ?? 1,
+    method: body.method,
+    params: body.params ?? [],
+  });
+  let lastErr = null;
+  for (const endpoint of [UPSTREAM_RPC, RPC_FALLBACK]) {
+    try {
+      const upstream = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: payload,
+        signal: AbortSignal.timeout(20_000),
+      });
+      const text = await upstream.text();
+      return new NextResponse(text, {
+        status: upstream.status,
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          'x-rc-upstream': new URL(endpoint).host,
+        },
+      });
+    } catch (e) {
+      lastErr = e;
+    }
   }
+  const why = (lastErr && (lastErr.cause?.code || lastErr.name)) || 'network error';
+  return denied(`upstream RPC unreachable (${why}) — check SOLANA_RPC_URL`, 502);
 }
 
 /* ------------------------------ validation ------------------------------- */
