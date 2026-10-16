@@ -57,7 +57,7 @@ function fmtSol(lamports) {
   return `${lamportsToSol(lamports).toFixed(6)} SOL`;
 }
 
-export default function Launchpad({ session, onExit }) {
+export default function Launchpad({ session, connector, onExit }) {
   /* ------------------------------ session -------------------------------- */
   const opUser = session?.username ?? session?.user ?? '';
   const opCode = session?.code ?? '';
@@ -95,6 +95,11 @@ export default function Launchpad({ session, onExit }) {
   const [launchErr, setLaunchErr] = useState('');
   const [coinInfo, setCoinInfo] = useState(null);
   const [copied, setCopied] = useState('');
+
+  /* ------------------------------ AI co-pilot ----------------------------- */
+  const [aiIdea, setAiIdea] = useState('');
+  const [aiBusy, setAiBusy] = useState(null); // 'gen' | 'review' | null
+  const [aiErr, setAiErr] = useState('');
 
   const busy = stage !== 'idle' && stage !== 'done';
 
@@ -264,6 +269,67 @@ export default function Launchpad({ session, onExit }) {
     } catch (_) {}
   }, []);
 
+  /* ---------------------------- AI co-pilot ops --------------------------- */
+  const aiArmed = !!connector;
+  const aiLabel = connector
+    ? connector.type === 'mcp'
+      ? connector.tool || 'mcp tool'
+      : connector.model || 'model'
+    : '';
+
+  const callCoPilot = useCallback(
+    async (action, payload) => {
+      const res = await fetch('/api/launch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action, username: opUser, code: opCode, connector, ...payload }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error || `co-pilot failed (${res.status})`);
+      return json;
+    },
+    [opUser, opCode, connector]
+  );
+
+  const aiGenerate = useCallback(async () => {
+    if (!aiArmed || aiBusy || !aiIdea.trim()) return;
+    setAiErr('');
+    setAiBusy('gen');
+    push('ai', `drafting from your idea via ${aiLabel}…`);
+    try {
+      const out = await callCoPilot('ai-gen', { idea: aiIdea.trim() });
+      setName(out.draft.name);
+      setSymbol(out.draft.symbol);
+      setDescription(out.draft.description);
+      push('ai', `draft ready — "${out.draft.name}" ($${out.draft.symbol}) · review & edit before launching`, 'ok');
+    } catch (e) {
+      setAiErr(String((e && e.message) || e));
+      push('ai', String((e && e.message) || e), 'error');
+    } finally {
+      setAiBusy(null);
+    }
+  }, [aiArmed, aiBusy, aiIdea, aiLabel, callCoPilot, push]);
+
+  const aiReview = useCallback(async () => {
+    if (!aiArmed || aiBusy) return;
+    setAiErr('');
+    setAiBusy('review');
+    push('ai', `asking ${aiLabel} to review the launch config…`);
+    try {
+      const out = await callCoPilot('ai-review', {
+        token: { name, symbol, description, website, twitter, telegram },
+      });
+      const kind = out.review.verdict === 'READY' ? 'ok' : out.review.verdict === 'NOT_READY' ? 'error' : 'warn';
+      push('ai', `AI REVIEW — ${out.review.verdict}`, kind);
+      out.review.notes.forEach((n) => push('ai', `  · ${n}`));
+    } catch (e) {
+      setAiErr(String((e && e.message) || e));
+      push('ai', String((e && e.message) || e), 'error');
+    } finally {
+      setAiBusy(null);
+    }
+  }, [aiArmed, aiBusy, aiLabel, name, symbol, description, website, twitter, telegram, callCoPilot, push]);
+
   /* ------------------------------ launch flow ----------------------------- */
   const canLaunch =
     !!wallet &&
@@ -416,7 +482,8 @@ export default function Launchpad({ session, onExit }) {
       </header>
 
       <div className="lp-body">
-        {/* ------------------------- left: token form ------------------------- */}
+        {/* --------------------- left: token form + AI co-pilot --------------------- */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
         <section className="lp-panel">
           <div className="lp-panel__head">
             <span>Token</span>
@@ -517,6 +584,63 @@ export default function Launchpad({ session, onExit }) {
             {disabledReason ? <p className="lp-note">{disabledReason}</p> : null}
           </div>
         </section>
+
+        {/* AI co-pilot — drafts metadata & reviews the config on YOUR linked AI */}
+        <section className="lp-panel">
+          <div className="lp-panel__head">
+            <span>AI co-pilot</span>
+            <span>{aiArmed ? `${aiLabel} · ${connector.type === 'mcp' ? 'MCP' : 'API'}` : 'no AI linked'}</span>
+          </div>
+          <div className="lp-panel__body">
+            {!aiArmed ? (
+              <p className="lp-note">
+                no AI linked — run <b>connect</b> in the terminal (any OpenAI-compatible key or MCP server), reopen
+                the launchpad, and the co-pilot drafts metadata + reviews your launch here. your key stays in this
+                browser, exactly like everywhere else in rootchain.
+              </p>
+            ) : (
+              <>
+                <div className="lp-field">
+                  <label className="lp-field__label" htmlFor="lp-ai-idea">
+                    token idea <span className="lp-field__count">{aiIdea.length}/500</span>
+                  </label>
+                  <textarea
+                    id="lp-ai-idea"
+                    className="lp-textarea"
+                    value={aiIdea}
+                    maxLength={500}
+                    placeholder="a chibi daemon cat that guards a solana terminal…"
+                    onChange={(e) => setAiIdea(e.target.value)}
+                    disabled={!!aiBusy}
+                  />
+                </div>
+                <div className="lp-walletrow">
+                  <button
+                    type="button"
+                    className="lp-btn"
+                    onClick={aiGenerate}
+                    disabled={!aiIdea.trim() || !!aiBusy || busy}
+                  >
+                    {aiBusy === 'gen' ? <>{<span className="lp-spin" />} drafting…</> : '⟳ draft metadata'}
+                  </button>
+                  <button
+                    type="button"
+                    className="lp-btn lp-btn--ghost"
+                    onClick={aiReview}
+                    disabled={!!aiBusy || busy || (!name.trim() && !symbol.trim())}
+                  >
+                    {aiBusy === 'review' ? <>{<span className="lp-spin" />} reviewing…</> : '✓ review launch'}
+                  </button>
+                </div>
+                {aiErr ? <p className="lp-err">{aiErr}</p> : null}
+                <p className="lp-note">
+                  drafts land in the form above — always yours to edit. review output prints in the launch log below.
+                </p>
+              </>
+            )}
+          </div>
+        </section>
+        </div>
 
         {/* ------------------------- right: ops column ------------------------ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>

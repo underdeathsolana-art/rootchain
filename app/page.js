@@ -1442,7 +1442,7 @@ export default function Page() {
   }
 
   if (launchMode && session) {
-    return <Launchpad session={session} onExit={() => setLaunchMode(false)} />;
+    return <Launchpad session={session} connector={connector} onExit={() => setLaunchMode(false)} />;
   }
 
   // dexview is public — guests may watch the chart and read the wall

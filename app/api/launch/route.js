@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findUserByCode } from '@/lib/store';
+import { sanitizeConnector, callChatApi, callMcp } from '@/lib/connector';
 
 /**
  * Rootchain Launchpad · server route.
@@ -300,6 +301,92 @@ async function handleCoin(req, body) {
   }
 }
 
+/* --------------------------- AI co-pilot actions ------------------------- */
+
+const GEN_SYSTEM =
+  'You are a meme-coin copywriter for a Solana launchpad. Reply with ONLY minified JSON, no markdown fences, no commentary: {"name": string max 32 chars, "symbol": string 2-13 chars uppercase A-Z and digits only, "description": string max 500 chars}. Be punchy and original. No financial promises, no returns claims, no existing trademarks or famous names.';
+const REVIEW_SYSTEM =
+  'You review a Solana token launch configuration. Reply with ONLY minified JSON, no markdown fences, no commentary: {"verdict": "READY" | "CAUTION" | "NOT_READY", "notes": array of at most 4 short strings, each max 120 chars}. Judge name/ticker fit, description clarity, spam or scam signals, and missing optional links.';
+
+/** Pull the first JSON object out of a model reply (tolerates fences/preamble). */
+function extractJson(text) {
+  if (typeof text !== 'string') return null;
+  const cleaned = text.replace(/```(?:json)?/gi, '');
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch (_) {
+    return null;
+  }
+}
+
+async function runConnector(cfg, system, prompt, { temperature, maxTokens }) {
+  if (cfg.type === 'mcp') {
+    const { text } = await callMcp(cfg, { system, prompt });
+    return text;
+  }
+  return callChatApi(cfg, [
+    { role: 'system', content: system },
+    { role: 'user', content: prompt },
+  ], { temperature, maxTokens });
+}
+
+function connectorLabel(cfg) {
+  return cfg.type === 'mcp' ? cfg.tool || 'mcp tool' : cfg.model || 'model';
+}
+
+async function handleAi(req, body, action) {
+  if (!rateLimit('ai', clientKey(req), 15, 60_000)) return denied('co-pilot rate-limited — slow down.', 429);
+  if (!(await authOperator(body.username, body.code))) return denied('Unrecognised operator code.');
+
+  const cfg = sanitizeConnector(body.connector);
+  if (!cfg) return denied('no usable AI connector — run "connect" in the terminal first.', 400);
+
+  try {
+    let reply;
+    if (action === 'ai-gen') {
+      const idea = String(body.idea || '').trim().slice(0, 500);
+      if (!idea) return denied('describe the token idea first.', 400);
+      reply = await runConnector(cfg, GEN_SYSTEM, `Token idea: ${idea}`, { temperature: 0.9, maxTokens: 900 });
+    } else {
+      const t = body.token || {};
+      const cfgText = JSON.stringify({
+        name: String(t.name || '').slice(0, 60),
+        symbol: String(t.symbol || '').slice(0, 20),
+        description: String(t.description || '').slice(0, 500),
+        website: String(t.website || '').slice(0, 120),
+        twitter: String(t.twitter || '').slice(0, 120),
+        telegram: String(t.telegram || '').slice(0, 120),
+      });
+      reply = await runConnector(cfg, REVIEW_SYSTEM, `Launch configuration: ${cfgText}`, { temperature: 0.3, maxTokens: 768 });
+    }
+
+    const parsed = extractJson(reply);
+    if (!parsed) return denied('the AI reply was not valid JSON — try again.', 502);
+
+    if (action === 'ai-gen') {
+      const name = String(parsed.name || '').trim().slice(0, 32);
+      const symbol = String(parsed.symbol || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 13);
+      const description = String(parsed.description || '').trim().slice(0, 500);
+      if (!name || symbol.length < 2 || !description) {
+        return denied('the AI draft was incomplete — try again with a clearer idea.', 502);
+      }
+      return NextResponse.json({ ok: true, draft: { name, symbol, description }, model: connectorLabel(cfg) });
+    }
+
+    const verdict = ['READY', 'CAUTION', 'NOT_READY'].includes(parsed.verdict) ? parsed.verdict : 'CAUTION';
+    const notes = Array.isArray(parsed.notes)
+      ? parsed.notes.slice(0, 4).map((n) => String(n).slice(0, 120)).filter(Boolean)
+      : [];
+    return NextResponse.json({ ok: true, review: { verdict, notes }, model: connectorLabel(cfg) });
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    return denied(`co-pilot call failed — ${msg.slice(0, 160)}`, 502);
+  }
+}
+
 /* --------------------------------- router -------------------------------- */
 
 export async function POST(req) {
@@ -321,6 +408,10 @@ export async function POST(req) {
   switch (body.action) {
     case 'coin':
       return handleCoin(req, body);
+    case 'ai-gen':
+      return handleAi(req, body, 'ai-gen');
+    case 'ai-review':
+      return handleAi(req, body, 'ai-review');
     default:
       return denied('unknown launch action', 400);
   }
