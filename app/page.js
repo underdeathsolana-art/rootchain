@@ -54,7 +54,7 @@ const HELP_TEXT = [
   '  dexview    open the DEX chart for the token — dexview <link|pool|CA>',
   '  scan       open the AI CONTRACT SCANNER — paste a Solana CA, get a',
   '             verdict (on-chain + github + market evidence, shareable to X)',
-  '  launch     pump.fun launchpad — launch a coin whose mint address ends',
+  '  launch     the token launchpad — launch a coin whose mint address ends',
   '             in *root · vanity keypair made + verified in your browser',
   '  sim        paper trading desk — fake money, real prices: sim buy 100',
   '             sim buy <usd|all> [ca] · sim sell <usd|all> · sim top · sim reset',
@@ -1194,7 +1194,7 @@ export default function Page() {
             break;
           }
           setLaunchMode(true);
-          push({ kind: 'sys', text: 'opening the pump.fun launchpad — *root vanity mint…', instant: true });
+          push({ kind: 'sys', text: 'opening the launchpad — *root vanity mint…', instant: true });
           break;
         }
 
