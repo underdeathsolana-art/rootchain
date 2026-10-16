@@ -765,7 +765,8 @@ export default function Launchpad({ session, connector, onExit }) {
                     generate a fresh solana mint whose address ends exactly in <b>*{VANITY_SUFFIX}</b> (case-sensitive,
                     part of the address itself). the current <b>create_v2</b> launch flow accepts a
                     caller-supplied mint keypair, so the suffix is real — but finding it is probabilistic: expect
-                    roughly <b>{fmtInt(expAttempts)}</b> keypairs on average, typically minutes at full speed.
+                    roughly <b>{fmtInt(expAttempts)}</b> keypairs on average — at grinding speed that usually means
+                    just seconds for a 3-char suffix.
                   </p>
                   <div className="lp-workers" aria-label="worker count">
                     {[1, 2, 4, 6].map((n) => (
